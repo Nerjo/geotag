@@ -2,7 +2,7 @@
    Bump CACHE_VERSION whenever any precached asset changes. */
 "use strict";
 
-const CACHE_VERSION = "geotag-v1";
+const CACHE_VERSION = "geotag-v2";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const TILE_CACHE = CACHE_VERSION + "-tiles";
 const TILE_MAX = 300; // cap stored map tiles

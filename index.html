@@ -270,8 +270,33 @@ body{
 
 /* custom leaflet pin */
 .geo-pin{filter:drop-shadow(0 4px 5px rgba(0,0,0,.4))}
+.geo-pin-wrap{position:relative;width:34px;height:44px}
+.geo-cone-holder{
+  position:absolute;left:-43px;top:-16px;width:120px;height:120px;
+  transform-origin:60px 60px;pointer-events:none;
+}
 .leaflet-popup-content-wrapper{border-radius:10px}
 .leaflet-popup-content{font-family:'IBM Plex Mono',monospace;font-size:.78rem;margin:11px 13px}
+
+/* caption + heading inputs in the readout */
+.cap-input{
+  width:100%;margin-top:6px;resize:vertical;min-height:54px;
+  font-family:'IBM Plex Mono',monospace;font-size:.82rem;line-height:1.45;color:var(--ink);
+  background:#fff;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;
+}
+.cap-input:focus{outline:none;border-color:var(--accent)}
+.hdg-edit{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hdg-edit input{
+  width:74px;font-family:'IBM Plex Mono',monospace;font-size:.86rem;color:var(--ink);
+  background:#fff;border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;
+}
+.hdg-edit input:focus{outline:none;border-color:var(--accent)}
+.hdg-edit .compass{font-family:'IBM Plex Mono',monospace;font-size:.8rem;color:var(--ink-soft)}
+.moved-tag{
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--accent-deep);border:1px solid #f3c3a6;
+  background:var(--accent-wash);border-radius:6px;padding:2px 6px;
+}
 
 /* ---------- responsive / phone ---------- */
 @media (max-width:760px){
@@ -392,7 +417,9 @@ body{
   let map=null, marker=null;
   let displaySrc=null;           // object URL currently shown in preview
   let exportBlob=null;
-  let state={ lat:null, lon:null, heading:null };
+  let state={ lat:null, lon:null, heading:null,
+              caption:'', captionEdited:false, address:null,
+              pinMoved:false, origLat:null, origLon:null };
 
   // Standalone build serves Leaflet/exifr/etc. from local vendored files. If a
   // file is missing or fails to parse, fail with a clear message instead of a
@@ -407,11 +434,30 @@ body{
     '<path d="M17 1C8.16 1 1 8.16 1 17c0 11.5 16 26 16 26s16-14.5 16-26C33 8.16 25.84 1 17 1z" fill="#ef5d12" stroke="#1a1c1e" stroke-width="1.6"/>'+
     '<circle cx="17" cy="17" r="6.4" fill="#1a1c1e"/><circle cx="17" cy="17" r="2.4" fill="#fff"/></svg>'
   );
+  // Direction cone: apex at (60,60), opening "up" (= north, 0°). Drawn into a
+  // 120×120 box that is positioned so its apex sits on the pin's tip; rotating
+  // the holder by the heading then points the cone where the camera faced.
+  const CONE_SVG =
+    '<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">'+
+    '<path d="M60 60 L33 13 A54 54 0 0 1 87 13 Z" fill="rgba(239,93,18,.30)" '+
+    'stroke="rgba(197,68,5,.85)" stroke-width="2" stroke-linejoin="round"/></svg>';
   const pinIcon = L.divIcon({
     className:'geo-pin',
-    html:'<img src="data:image/svg+xml,'+PIN_SVG+'" width="34" height="44" alt="">',
+    html:'<div class="geo-pin-wrap">'+
+         '<span class="geo-cone-holder" style="display:none">'+CONE_SVG+'</span>'+
+         '<img src="data:image/svg+xml,'+PIN_SVG+'" width="34" height="44" alt="">'+
+         '</div>',
     iconSize:[34,44], iconAnchor:[17,44], popupAnchor:[0,-40]
   });
+
+  // Update the live-map cone rotation/visibility from state.heading.
+  function setCone(deg){
+    if(!marker || !marker._icon) return;
+    const holder=marker._icon.querySelector('.geo-cone-holder');
+    if(!holder) return;
+    if(deg==null || isNaN(deg)){ holder.style.display='none'; }
+    else{ holder.style.display='block'; holder.style.transform='rotate('+deg+'deg)'; }
+  }
 
   /* ---------- ui helpers ---------- */
   function setStatus(msg,type){
@@ -444,6 +490,28 @@ body{
     ctx.drawImage(img, sx,sy,sw,sh, dx,dy,dw,dh);
   }
 
+  // Greedy word-wrap for canvas text. Returns up to `maxLines` lines that fit
+  // within `maxW`; the last line is ellipsised if the text overflows.
+  function wrapLines(text, maxW, font, maxLines){
+    text=(text||'').replace(/\s+/g,' ').trim();
+    if(!text) return [];
+    const c=wrapLines._ctx||(wrapLines._ctx=document.createElement('canvas').getContext('2d'));
+    c.font=font;
+    const words=text.split(' '), lines=[]; let cur='';
+    for(const w of words){
+      const test=cur?cur+' '+w:w;
+      if(c.measureText(test).width<=maxW || !cur){ cur=test; }
+      else{ lines.push(cur); cur=w; }
+    }
+    if(cur) lines.push(cur);
+    if(lines.length>maxLines){
+      let last=lines[maxLines-1]+'…';
+      while(c.measureText(last).width>maxW && last.length>1) last=last.slice(0,-2)+'…';
+      lines.length=maxLines; lines[maxLines-1]=last;
+    }
+    return lines;
+  }
+
   /* ---------- coordinate formatting ---------- */
   function toDMS(value,isLat){
     const dir = value>=0 ? (isLat?'N':'E') : (isLat?'S':'W');
@@ -460,7 +528,9 @@ body{
     readout.innerHTML='';
     exportBtn.disabled=true;
     exportBlob=null;
-    state={lat:null,lon:null,heading:null};
+    state={lat:null,lon:null,heading:null,
+           caption:'',captionEdited:false,address:null,
+           pinMoved:false,origLat:null,origLon:null};
     dimReadout.textContent='—'; zoomReadout.textContent='—';
   }
 
@@ -532,33 +602,46 @@ body{
     const camera=[exif.Make,exif.Model].filter(Boolean).join(' ').trim()||'—';
 
     if(gps){
-      const latDec=gps.latitude.toFixed(7), lonDec=gps.longitude.toFixed(7);
-      rows.push(field('Latitude', latDec+'°', latDec, 'span2'));
-      rows.push(field('Longitude', lonDec+'°', lonDec, 'span2'));
-      rows.push(field('Latitude (DMS)', toDMS(gps.latitude,true), null, 'span2'));
-      rows.push(field('Longitude (DMS)', toDMS(gps.longitude,false), null, 'span2'));
+      const latDec=state.lat.toFixed(7), lonDec=state.lon.toFixed(7);
+      rows.push(field('Latitude', latDec+'°', latDec, 'span2', 'latField'));
+      rows.push(field('Longitude', lonDec+'°', lonDec, 'span2', 'lonField'));
+      rows.push(field('Latitude (DMS)', toDMS(state.lat,true), null, 'span2', 'latDmsField'));
+      rows.push(field('Longitude (DMS)', toDMS(state.lon,false), null, 'span2', 'lonDmsField'));
       rows.push(field('Altitude', (typeof exif.GPSAltitude==='number')? exif.GPSAltitude.toFixed(1)+' m' : '—'));
-      rows.push(field('Heading', (typeof exif.GPSImgDirection==='number')? Math.round(exif.GPSImgDirection)+'° '+compass(exif.GPSImgDirection) : '—'));
+      // Heading is editable: pre-filled from EXIF when present, otherwise left
+      // blank so a user can add the camera-pointing direction by hand.
+      const hv=state.heading!=null?(' value="'+Math.round(state.heading)+'"'):'';
+      const hc=state.heading!=null?('° '+compass(state.heading)):'set direction';
+      rows.push(
+        '<div class="field"><div class="k">Heading</div><div class="v"><div class="hdg-edit">'+
+        '<input id="headingField" type="number" min="0" max="359" step="1" inputmode="numeric" placeholder="—"'+hv+'>'+
+        '<span class="compass" id="headingCompass">'+hc+'</span>'+
+        '</div></div></div>'
+      );
     }
     rows.push(field('Captured', dateStr));
     rows.push(field('Camera', camera));
     if(gps){
-      const pair=gps.latitude.toFixed(6)+', '+gps.longitude.toFixed(6);
+      const pair=state.lat.toFixed(6)+', '+state.lon.toFixed(6);
       rows.push(
-        '<div class="field wide"><div class="k">Coordinates</div>'+
-        '<div class="v"><span data-copy="'+pair+'">'+pair+'</span>'+
+        '<div class="field wide"><div class="k">Coordinates <span id="movedTag" class="moved-tag" style="display:none">adjusted</span></div>'+
+        '<div class="v"><span id="coordPair" data-copy="'+pair+'">'+pair+'</span>'+
         copyBtn(pair)+'</div></div>'
       );
+      // Caption replaces the old read-only Address field. It is auto-filled from
+      // the reverse-geocoded address (see reverseGeocode) but is freely editable,
+      // and it is what gets printed at the bottom of the exported report image.
       rows.push(
-        '<div class="field wide"><div class="k">Address</div>'+
-        '<div class="v span2" id="addrField">Looking up…</div></div>'
+        '<div class="field wide"><div class="k">Caption</div>'+
+        '<textarea id="captionField" class="cap-input" rows="2" '+
+        'placeholder="Looking up address… (or type your own caption)">'+esc(state.caption||'')+'</textarea>'+
+        '</div>'
       );
-      const g=encodeURIComponent(pair);
       rows.push(
         '<div class="field wide"><div class="k">Open in</div><div class="v"><div class="maplinks">'+
-        '<a class="maplink" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+g+'">▸ Google Maps</a>'+
-        '<a class="maplink" target="_blank" rel="noopener" href="https://maps.apple.com/?ll='+encodeURIComponent(gps.latitude+','+gps.longitude)+'&q=Photo%20Location">▸ Apple Maps</a>'+
-        '<a class="maplink" target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat='+gps.latitude+'&mlon='+gps.longitude+'#map=18/'+gps.latitude+'/'+gps.longitude+'">▸ OpenStreetMap</a>'+
+        '<a id="gmapLink" class="maplink" target="_blank" rel="noopener" href="#">▸ Google Maps</a>'+
+        '<a id="amapLink" class="maplink" target="_blank" rel="noopener" href="#">▸ Apple Maps</a>'+
+        '<a id="osmLink" class="maplink" target="_blank" rel="noopener" href="#">▸ OpenStreetMap</a>'+
         '</div></div></div>'
       );
     }
@@ -568,10 +651,45 @@ body{
     readout.querySelectorAll('.copy').forEach(b=>{
       b.addEventListener('click',()=>copyText(b.dataset.copy, b.dataset.label||'Copied'));
     });
+
+    if(gps){
+      updateCoordReadout();      // fill coord spans, map links, moved-tag
+      const cap=$('captionField');
+      if(cap) cap.addEventListener('input',()=>{ state.caption=cap.value; state.captionEdited=true; });
+      const hf=$('headingField');
+      if(hf) hf.addEventListener('input',()=>{
+        let v=parseInt(hf.value,10);
+        if(isNaN(v)){ state.heading=null; }
+        else{ v=((v%360)+360)%360; state.heading=v; }
+        const hc=$('headingCompass');
+        if(hc) hc.textContent = state.heading!=null ? ('° '+compass(state.heading)) : 'set direction';
+        setCone(state.heading);
+      });
+    }
   }
 
-  function field(k,v,copyVal,cls){
-    return '<div class="field"><div class="k">'+esc(k)+'</div><div class="v '+(cls||'')+'">'+
+  // Refresh the coordinate-dependent parts of the readout (used on first render
+  // and whenever the pin is dragged to a new position).
+  function updateCoordReadout(){
+    if(state.lat==null) return;
+    const latDec=state.lat.toFixed(7), lonDec=state.lon.toFixed(7);
+    const pair=state.lat.toFixed(6)+', '+state.lon.toFixed(6);
+    const set=(id,txt)=>{ const e=$(id); if(e){ const s=e.querySelector('span'); (s||e).textContent=txt; } };
+    set('latField', latDec+'°'); set('lonField', lonDec+'°');
+    set('latDmsField', toDMS(state.lat,true)); set('lonDmsField', toDMS(state.lon,false));
+    const setCopy=(id,val)=>{ const e=$(id); if(e){ const b=e.querySelector('.copy'); if(b) b.setAttribute('data-copy',val); } };
+    setCopy('latField', latDec); setCopy('lonField', lonDec);
+    const cp=$('coordPair'); if(cp){ cp.textContent=pair; cp.setAttribute('data-copy',pair);
+      const btn=cp.parentElement.querySelector('.copy'); if(btn) btn.setAttribute('data-copy',pair); }
+    const g=encodeURIComponent(pair);
+    const gm=$('gmapLink'); if(gm) gm.href='https://www.google.com/maps/search/?api=1&query='+g;
+    const am=$('amapLink'); if(am) am.href='https://maps.apple.com/?ll='+encodeURIComponent(state.lat+','+state.lon)+'&q=Photo%20Location';
+    const os=$('osmLink'); if(os) os.href='https://www.openstreetmap.org/?mlat='+state.lat+'&mlon='+state.lon+'#map=18/'+state.lat+'/'+state.lon;
+    const mt=$('movedTag'); if(mt) mt.style.display = state.pinMoved ? 'inline-block' : 'none';
+  }
+
+  function field(k,v,copyVal,cls,id){
+    return '<div class="field"><div class="k">'+esc(k)+'</div><div class="v '+(cls||'')+'"'+(id?(' id="'+id+'"'):'')+'>'+
       '<span>'+esc(v)+'</span>'+(copyVal?copyBtn(copyVal,k):'')+'</div></div>';
   }
   function copyBtn(val,label){
@@ -583,9 +701,11 @@ body{
     return dirs[Math.round(((deg%360)/22.5))%16];
   }
 
-  /* ---------- reverse geocoding (graceful) ---------- */
+  /* ---------- reverse geocoding (graceful) ----------
+     Looks up the address and uses it to PRE-FILL the caption box — but only
+     while the user hasn't typed their own caption (state.captionEdited). */
   async function reverseGeocode(lat,lon){
-    const el=$('addrField'); if(!el) return;
+    const cap=$('captionField');
     try{
       const ctrl=new AbortController();
       const t=setTimeout(()=>ctrl.abort(),7000);
@@ -595,10 +715,12 @@ body{
       const j=await r.json();
       if(j && j.display_name){
         state.address=j.display_name;
-        el.innerHTML='<span>'+esc(j.display_name)+'</span>'+copyBtn(j.display_name,'Address');
-        el.querySelector('.copy').addEventListener('click',e=>copyText(e.currentTarget.dataset.copy,'Address'));
-      }else{ el.textContent='Address unavailable'; }
-    }catch(_){ el.textContent='Address lookup unavailable (offline)'; }
+        if(!state.captionEdited){
+          state.caption=j.display_name;
+          if(cap) cap.value=j.display_name;
+        }
+      }else if(cap && !state.captionEdited){ cap.placeholder='Address unavailable — type a caption'; }
+    }catch(_){ if(cap && !state.captionEdited) cap.placeholder='Address lookup unavailable (offline) — type a caption'; }
   }
 
   /* ---------- map ---------- */
@@ -633,15 +755,35 @@ body{
         map=L.map(el,{preferCanvas:false,zoomControl:true}).setView([lat,lon],16);
         const type=document.querySelector('input[name="mapType"]:checked').value;
         tileLayerFor(type).addTo(map);
-        marker=L.marker([lat,lon],{icon:pinIcon}).addTo(map);
-        const pair=lat.toFixed(6)+', '+lon.toFixed(6);
-        marker.bindPopup('<strong>📍 Photo location</strong><br>'+pair).openPopup();
+        marker=L.marker([lat,lon],{icon:pinIcon,draggable:true,autoPan:true}).addTo(map);
+        marker.bindPopup(popupHtml()).openPopup();
+        marker.on('drag',()=>{ const p=marker.getLatLng(); marker.setPopupContent(popupHtml(p.lat,p.lng)); });
+        marker.on('dragend',onPinMoved);
+        setCone(state.heading);     // restore the heading cone after (re)build
         L.control.scale({metric:true,imperial:true,position:'bottomright'}).addTo(map);
         map.on('zoomend',()=>{ zoomReadout.textContent='z'+map.getZoom(); });
         zoomReadout.textContent='z'+map.getZoom();
         setTimeout(()=>{ map.invalidateSize(); resolve(); },180);
       },80);
     });
+  }
+
+  function popupHtml(lat,lon){
+    lat=(lat!=null?lat:state.lat); lon=(lon!=null?lon:state.lon);
+    const pair=lat.toFixed(6)+', '+lon.toFixed(6);
+    const title=state.pinMoved ? '📍 Adjusted location' : '📍 Photo location';
+    return '<strong>'+title+'</strong><br>'+pair+'<br><span style="color:#8b8e94">drag to adjust</span>';
+  }
+
+  // Pin was dragged: adopt the new coordinates, flag the manual move, and refresh
+  // every coordinate-dependent part of the UI (readout, links, popup, address).
+  function onPinMoved(){
+    const p=marker.getLatLng();
+    if(!state.pinMoved){ state.origLat=state.lat; state.origLon=state.lon; state.pinMoved=true; }
+    state.lat=p.lat; state.lon=p.lng;
+    updateCoordReadout();
+    marker.setPopupContent(popupHtml());
+    reverseGeocode(state.lat,state.lon);   // refresh suggested address (won't clobber edited caption)
   }
 
   // re-render map when style changes
@@ -668,14 +810,23 @@ body{
     if(state.lat==null) return;
     setStatus('Rendering report image…','loading');
 
-    const scale=2, gap=18, radius=14, maxW=1180, captionH=92, captureScale=2;
+    const scale=2, gap=18, radius=14, maxW=1180, captureScale=2;
     const ar=(preview.naturalHeight/preview.naturalWidth)||1;
     // Both panels share the SAME rectangle, mirroring the on-screen two-pane view.
     // Photo width capped at half the canvas; the map takes an identical rectangle.
     const panelW=Math.round(Math.min(preview.naturalWidth, (maxW-gap)/2));
     const imgW=panelW, imgH=Math.round(panelW*ar);
     const mapW=panelW, mapH=imgH;
-    const W=imgW+mapW+gap, H=imgH+captionH;
+    const W=imgW+mapW+gap;
+
+    // Caption bar height adapts to its content (wrapped caption + optional
+    // "pin moved" note) so nothing is ever clipped.
+    const capFont='12px "IBM Plex Mono", monospace';
+    const capLines=wrapLines(state.caption, W, capFont, 3);
+    const lineH=18;
+    const captionH=14 /*top*/ + 24 /*coord line*/ + capLines.length*lineH
+                   + (state.pinMoved?lineH:0) + 24 /*footer*/ + 12 /*bottom*/;
+    const H=imgH+captionH;
 
     const canvas=exportCanvas, ctx=canvas.getContext('2d');
     canvas.width=W*scale; canvas.height=H*scale;
@@ -722,11 +873,24 @@ body{
       // html2canvas returns, the map is scaled uniformly — never squished. The
       // map is centred on the pin, so the crop stays centred on it too.
       drawCover(ctx, mapCanvas, mx, 0, mapW, mapH);
+      const tipX=mx+mapW/2, tipY=mapH/2;   // pin tip = geographic point
+      // heading cone (drawn under the pin), pointing where the camera faced
+      if(state.heading!=null){
+        const R=54, half=30*Math.PI/180, up=-Math.PI/2;
+        ctx.save();
+        ctx.translate(tipX,tipY);
+        ctx.rotate(state.heading*Math.PI/180);   // 0°=N=up, clockwise like a compass
+        ctx.beginPath(); ctx.moveTo(0,0);
+        ctx.arc(0,0,R, up-half, up+half); ctx.closePath();
+        ctx.fillStyle='rgba(239,93,18,.30)'; ctx.fill();
+        ctx.lineWidth=2; ctx.strokeStyle='rgba(197,68,5,.85)'; ctx.stroke();
+        ctx.restore();
+      }
       // draw pin at centre
       const pin=new Image();
       await new Promise(r=>{ pin.onload=r; pin.onerror=r; pin.src='data:image/svg+xml,'+PIN_SVG; });
       const pw=34,ph=44;
-      ctx.drawImage(pin, mx+mapW/2-pw/2, mapH/2-ph, pw, ph);
+      ctx.drawImage(pin, tipX-pw/2, tipY-ph, pw, ph);
       ctx.restore();
     }catch(e){
       console.error('map capture',e);
@@ -740,17 +904,25 @@ body{
 
     // caption bar
     const cy=imgH+14;
+    ctx.textAlign='left';
     ctx.fillStyle='#ef5d12'; ctx.fillRect(0,cy,46,3);
-    ctx.fillStyle='#1a1c1e';
-    ctx.font='600 13px "IBM Plex Mono", monospace'; ctx.textAlign='left';
+    let y=cy+21;
+    ctx.fillStyle='#1a1c1e'; ctx.font='600 13px "IBM Plex Mono", monospace';
     const coord='LAT '+state.lat.toFixed(6)+'°   LON '+state.lon.toFixed(6)+'°'+
-      (state.heading!=null?'   HDG '+Math.round(state.heading)+'°':'');
-    ctx.fillText(coord, 0, cy+22);
-    ctx.fillStyle='#52555b'; ctx.font='12px "IBM Plex Mono", monospace';
-    const addr=(state.address||'').slice(0,96);
-    if(addr) ctx.fillText(addr, 0, cy+42);
+      (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'');
+    ctx.fillText(coord, 0, y);
+    // caption (user text, wrapped)
+    ctx.fillStyle='#52555b'; ctx.font=capFont;
+    for(const line of capLines){ y+=lineH; ctx.fillText(line, 0, y); }
+    // manual-move note
+    if(state.pinMoved){
+      y+=lineH;
+      ctx.fillStyle='#c54405'; ctx.font='600 11px "IBM Plex Mono", monospace';
+      ctx.fillText('⚠ PIN POSITION MANUALLY ADJUSTED', 0, y);
+    }
+    y+=22;
     ctx.fillStyle='#8b8e94'; ctx.font='10px "IBM Plex Mono", monospace';
-    ctx.fillText('GEOTAG · FIELD INSPECTION MAPPER', 0, cy+62);
+    ctx.fillText('GEOTAG · FIELD INSPECTION MAPPER', 0, y);
 
     exportBlob=await new Promise(res=>canvas.toBlob(res,'image/png'));
     clearStatus();
