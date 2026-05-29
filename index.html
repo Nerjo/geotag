@@ -298,9 +298,41 @@ body{
   background:var(--accent-wash);border-radius:6px;padding:2px 6px;
 }
 
+/* ---------- multi-photo cards ---------- */
+.ws-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.ws-bar .segmented{margin-bottom:0}
+.ws-count{
+  font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-faint);margin-left:auto;
+}
+.card{
+  background:var(--card);border:1.5px solid var(--ink);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:14px;margin-bottom:18px;
+}
+.card-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.card-num{
+  font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.12em;
+  background:var(--ink);color:#fff;border-radius:6px;padding:3px 7px;flex:0 0 auto;
+}
+.card-title{font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-remove{
+  margin-left:auto;flex:0 0 auto;border:1.5px solid var(--line-strong);background:#fff;
+  width:30px;height:30px;border-radius:8px;cursor:pointer;color:var(--ink-soft);font-size:15px;line-height:1;
+}
+.card-remove:hover{background:#b3331c;color:#fff;border-color:#b3331c}
+.card .pane{box-shadow:none}
+.card .cphoto{display:block;width:100%;height:auto;background:#f1ede4}
+.card .cmap{width:100%;min-height:280px;background:#e7e2d6}
+.card .creadout{margin-top:14px;border:1.5px solid var(--line-strong);border-radius:var(--radius);overflow:hidden}
+.card .card-status{margin-top:12px}
+.card-actions{margin-top:14px;display:flex;justify-content:flex-end;gap:10px}
+.canvas-row.solo{grid-template-columns:1fr}
+
 /* ---------- responsive / phone ---------- */
 @media (max-width:760px){
-  body{padding:14px 12px calc(96px + env(safe-area-inset-bottom))}
+  body{padding:14px 12px calc(24px + env(safe-area-inset-bottom))}
+  .card .cmap{height:300px}
+  .card{padding:11px}
   .wordmark h1{font-size:1.5rem}
   .canvas-row{grid-template-columns:1fr;gap:14px}
   #map{height:300px}
@@ -344,42 +376,30 @@ body{
     </div>
   </header>
 
-  <div class="drop" id="dropzone" role="button" tabindex="0" aria-label="Upload a photo">
+  <div class="drop" id="dropzone" role="button" tabindex="0" aria-label="Upload photos">
     <div class="ico">📍</div>
-    <div class="big">Drop a geotagged photo here</div>
-    <div class="small">JPG · PNG · HEIC</div>
+    <div class="big">Drop geotagged photos here</div>
+    <div class="small">JPG · PNG · HEIC · add as many as you like</div>
     <span class="btn accent browse" type="button">Browse files</span>
   </div>
 
-  <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.heic,image/heic,image/jpeg,image/png" hidden>
+  <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.heic,image/heic,image/jpeg,image/png" multiple hidden>
 
   <div class="status" id="status"></div>
 
   <section class="workspace" id="workspace" aria-live="polite">
 
-    <div class="segmented" id="mapTypes" role="radiogroup" aria-label="Map style">
-      <label class="active" data-type="osm"><input type="radio" name="mapType" value="osm" checked><span>Street</span></label>
-      <label data-type="satellite"><input type="radio" name="mapType" value="satellite"><span>Satellite</span></label>
-      <label data-type="topo"><input type="radio" name="mapType" value="topo"><span>Topo</span></label>
-    </div>
-
-    <div class="canvas-row">
-      <div class="pane">
-        <div class="pane-head"><span><span class="dot"></span>Photo</span><span id="dimReadout">—</span></div>
-        <img id="imagePreview" alt="Uploaded photo preview">
+    <div class="ws-bar">
+      <div class="segmented" id="mapTypes" role="radiogroup" aria-label="Map style">
+        <label class="active" data-type="osm"><input type="radio" name="mapType" value="osm" checked><span>Street</span></label>
+        <label data-type="satellite"><input type="radio" name="mapType" value="satellite"><span>Satellite</span></label>
+        <label data-type="topo"><input type="radio" name="mapType" value="topo"><span>Topo</span></label>
       </div>
-      <div class="pane" id="mapPane">
-        <div class="pane-head"><span><span class="dot"></span>Location</span><span id="zoomReadout">—</span></div>
-        <div id="map"></div>
-      </div>
+      <span class="ws-count" id="wsCount"></span>
+      <button class="btn ghost" id="clearAllBtn">↺ Clear all</button>
     </div>
 
-    <div class="readout" id="readout"></div>
-
-    <div class="actions" id="actions">
-      <button class="btn ghost left" id="newBtn">↺ New photo</button>
-      <button class="btn accent" id="exportBtn" disabled>⧉ Build report image</button>
-    </div>
+    <div id="cards"></div>
 
   </section>
 </div>
@@ -410,22 +430,15 @@ body{
 
   const $ = id => document.getElementById(id);
   const dropzone=$('dropzone'), fileInput=$('fileInput'), statusEl=$('status'),
-        workspace=$('workspace'), preview=$('imagePreview'), readout=$('readout'),
-        toast=$('toast'), overlay=$('overlay'), exportCanvas=$('exportCanvas'),
-        exportBtn=$('exportBtn'), dimReadout=$('dimReadout'), zoomReadout=$('zoomReadout');
-
-  let map=null, marker=null;
-  let displaySrc=null;           // object URL currently shown in preview
-  let exportBlob=null;
-  let state={ lat:null, lon:null, heading:null,
-              caption:'', captionEdited:false, address:null,
-              pinMoved:false, origLat:null, origLon:null };
+        workspace=$('workspace'), cardsEl=$('cards'), wsCount=$('wsCount'),
+        toast=$('toast'), overlay=$('overlay'), exportCanvas=$('exportCanvas');
 
   // Standalone build serves Leaflet/exifr/etc. from local vendored files. If a
   // file is missing or fails to parse, fail with a clear message instead of a
   // blank page.
   if(typeof L==='undefined' || typeof exifr==='undefined'){
-    setStatus('Couldn’t load the app libraries. Try reloading the page.','err');
+    statusEl.className='status show err';
+    statusEl.innerHTML='<span>Couldn’t load the app libraries. Try reloading the page.</span>';
     return;
   }
 
@@ -450,16 +463,7 @@ body{
     iconSize:[34,44], iconAnchor:[17,44], popupAnchor:[0,-40]
   });
 
-  // Update the live-map cone rotation/visibility from state.heading.
-  function setCone(deg){
-    if(!marker || !marker._icon) return;
-    const holder=marker._icon.querySelector('.geo-cone-holder');
-    if(!holder) return;
-    if(deg==null || isNaN(deg)){ holder.style.display='none'; }
-    else{ holder.style.display='block'; holder.style.transform='rotate('+deg+'deg)'; }
-  }
-
-  /* ---------- ui helpers ---------- */
+  /* ---------- shared ui helpers ---------- */
   function setStatus(msg,type){
     statusEl.className='status show '+(type||'ok');
     statusEl.innerHTML=(type==='loading'?'<span class="spinner"></span>':'')+'<span>'+msg+'</span>';
@@ -474,12 +478,11 @@ body{
   function copyText(t,label){ navigator.clipboard.writeText(t).then(()=>ping((label||'Copied')+' ✓')).catch(()=>ping('Copy failed')); }
   const isPhone = ()=>window.matchMedia('(max-width:760px)').matches;
   const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const currentMapType = ()=>document.querySelector('input[name="mapType"]:checked').value;
 
   function validImage(f){ return f && (f.type.startsWith('image/') || /\.heic$/i.test(f.name)); }
 
   // Draw `img` into the dest rect using COVER fit (uniform scale + centre-crop).
-  // This guarantees the map is never stretched, no matter what dimensions
-  // html2canvas hands back — only the aspect ratio of the dest rect is honoured.
   function drawCover(ctx,img,dx,dy,dw,dh){
     const iw=img.width, ih=img.height;
     if(!iw||!ih){ return; }
@@ -519,211 +522,22 @@ body{
     const d=Math.floor(abs), mFloat=(abs-d)*60, m=Math.floor(mFloat), s=(mFloat-m)*60;
     return d+'° '+String(m).padStart(2,'0')+"' "+s.toFixed(2)+'" '+dir;
   }
-
-  /* ---------- cleanup ---------- */
-  function reset(){
-    if(map){ map.remove(); map=null; marker=null; }
-    if(displaySrc){ URL.revokeObjectURL(displaySrc); displaySrc=null; }
-    preview.removeAttribute('src');
-    readout.innerHTML='';
-    exportBtn.disabled=true;
-    exportBlob=null;
-    state={lat:null,lon:null,heading:null,
-           caption:'',captionEdited:false,address:null,
-           pinMoved:false,origLat:null,origLon:null};
-    dimReadout.textContent='—'; zoomReadout.textContent='—';
+  function compass(deg){
+    const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return dirs[Math.round(((deg%360)/22.5))%16];
   }
 
-  /* ---------- HEIC ---------- */
-  async function toDisplayable(file){
-    if(!/\.heic$/i.test(file.name) && file.type!=='image/heic') return file;
-    setStatus('Converting HEIC…','loading');
-    const blob=await heic2any({blob:file,toType:'image/jpeg',quality:0.9});
-    return new File([Array.isArray(blob)?blob[0]:blob], file.name.replace(/\.heic$/i,'.jpg'), {type:'image/jpeg'});
-  }
-
-  /* ---------- main pipeline ---------- */
-  async function handleFile(file){
-    reset();
-    setStatus('Reading image…','loading');
-    workspace.classList.add('show');
-
-    try{
-      const displayFile=await toDisplayable(file);
-
-      // load preview + capture natural dimensions
-      displaySrc=URL.createObjectURL(displayFile);
-      await new Promise((res,rej)=>{
-        preview.onload=()=>{ dimReadout.textContent=preview.naturalWidth+' × '+preview.naturalHeight+' px'; res(); };
-        preview.onerror=rej;
-        preview.src=displaySrc;
-      });
-
-      // EXIF is read from the ORIGINAL file (conversion can drop metadata)
-      let exif={}, gps=null;
-      try{
-        const [parsed, g]=await Promise.all([
-          exifr.parse(file,{tiff:true,exif:true,gps:true}).catch(()=>({})),
-          exifr.gps(file).catch(()=>null)
-        ]);
-        exif=parsed||{}; gps=g;
-      }catch(_){}
-
-      if(!gps || gps.latitude==null){
-        clearStatus();
-        setStatus('No GPS data in this photo. Showing available metadata. (Enable location/“Camera” access before shooting to embed GPS.)','warn');
-        renderReadout(exif,null);
-        exportBtn.disabled=true;
-        return;
-      }
-
-      state.lat=gps.latitude; state.lon=gps.longitude;
-      state.heading=(typeof exif.GPSImgDirection==='number')?exif.GPSImgDirection:null;
-
-      clearStatus();
-      setStatus('GPS location found','ok');
-      renderReadout(exif,gps);
-      await renderMap(state.lat,state.lon);
-      exportBtn.disabled=false;
-      reverseGeocode(state.lat,state.lon);
-    }catch(err){
-      console.error(err);
-      setStatus('Could not process this image. Try another file.','err');
-    }
-  }
-
-  /* ---------- readout panel ---------- */
-  function renderReadout(exif,gps){
-    const rows=[];
-    const dt=exif.DateTimeOriginal||exif.CreateDate||exif.ModifyDate;
-    const dateStr=dt instanceof Date && !isNaN(dt)
-      ? dt.toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
-      : '—';
-    const camera=[exif.Make,exif.Model].filter(Boolean).join(' ').trim()||'—';
-
-    if(gps){
-      const latDec=state.lat.toFixed(7), lonDec=state.lon.toFixed(7);
-      rows.push(field('Latitude', latDec+'°', latDec, 'span2', 'latField'));
-      rows.push(field('Longitude', lonDec+'°', lonDec, 'span2', 'lonField'));
-      rows.push(field('Latitude (DMS)', toDMS(state.lat,true), null, 'span2', 'latDmsField'));
-      rows.push(field('Longitude (DMS)', toDMS(state.lon,false), null, 'span2', 'lonDmsField'));
-      rows.push(field('Altitude', (typeof exif.GPSAltitude==='number')? exif.GPSAltitude.toFixed(1)+' m' : '—'));
-      // Heading is editable: pre-filled from EXIF when present, otherwise left
-      // blank so a user can add the camera-pointing direction by hand.
-      const hv=state.heading!=null?(' value="'+Math.round(state.heading)+'"'):'';
-      const hc=state.heading!=null?('° '+compass(state.heading)):'set direction';
-      rows.push(
-        '<div class="field"><div class="k">Heading</div><div class="v"><div class="hdg-edit">'+
-        '<input id="headingField" type="number" min="0" max="359" step="1" inputmode="numeric" placeholder="—"'+hv+'>'+
-        '<span class="compass" id="headingCompass">'+hc+'</span>'+
-        '</div></div></div>'
-      );
-    }
-    rows.push(field('Captured', dateStr));
-    rows.push(field('Camera', camera));
-    if(gps){
-      const pair=state.lat.toFixed(6)+', '+state.lon.toFixed(6);
-      rows.push(
-        '<div class="field wide"><div class="k">Coordinates <span id="movedTag" class="moved-tag" style="display:none">adjusted</span></div>'+
-        '<div class="v"><span id="coordPair" data-copy="'+pair+'">'+pair+'</span>'+
-        copyBtn(pair)+'</div></div>'
-      );
-      // Caption replaces the old read-only Address field. It is auto-filled from
-      // the reverse-geocoded address (see reverseGeocode) but is freely editable,
-      // and it is what gets printed at the bottom of the exported report image.
-      rows.push(
-        '<div class="field wide"><div class="k">Caption</div>'+
-        '<textarea id="captionField" class="cap-input" rows="2" '+
-        'placeholder="Looking up address… (or type your own caption)">'+esc(state.caption||'')+'</textarea>'+
-        '</div>'
-      );
-      rows.push(
-        '<div class="field wide"><div class="k">Open in</div><div class="v"><div class="maplinks">'+
-        '<a id="gmapLink" class="maplink" target="_blank" rel="noopener" href="#">▸ Google Maps</a>'+
-        '<a id="amapLink" class="maplink" target="_blank" rel="noopener" href="#">▸ Apple Maps</a>'+
-        '<a id="osmLink" class="maplink" target="_blank" rel="noopener" href="#">▸ OpenStreetMap</a>'+
-        '</div></div></div>'
-      );
-    }
-
-    readout.innerHTML='<div class="readout-grid">'+rows.join('')+'</div>';
-
-    readout.querySelectorAll('.copy').forEach(b=>{
-      b.addEventListener('click',()=>copyText(b.dataset.copy, b.dataset.label||'Copied'));
-    });
-
-    if(gps){
-      updateCoordReadout();      // fill coord spans, map links, moved-tag
-      const cap=$('captionField');
-      if(cap) cap.addEventListener('input',()=>{ state.caption=cap.value; state.captionEdited=true; });
-      const hf=$('headingField');
-      if(hf) hf.addEventListener('input',()=>{
-        let v=parseInt(hf.value,10);
-        if(isNaN(v)){ state.heading=null; }
-        else{ v=((v%360)+360)%360; state.heading=v; }
-        const hc=$('headingCompass');
-        if(hc) hc.textContent = state.heading!=null ? ('° '+compass(state.heading)) : 'set direction';
-        setCone(state.heading);
-      });
-    }
-  }
-
-  // Refresh the coordinate-dependent parts of the readout (used on first render
-  // and whenever the pin is dragged to a new position).
-  function updateCoordReadout(){
-    if(state.lat==null) return;
-    const latDec=state.lat.toFixed(7), lonDec=state.lon.toFixed(7);
-    const pair=state.lat.toFixed(6)+', '+state.lon.toFixed(6);
-    const set=(id,txt)=>{ const e=$(id); if(e){ const s=e.querySelector('span'); (s||e).textContent=txt; } };
-    set('latField', latDec+'°'); set('lonField', lonDec+'°');
-    set('latDmsField', toDMS(state.lat,true)); set('lonDmsField', toDMS(state.lon,false));
-    const setCopy=(id,val)=>{ const e=$(id); if(e){ const b=e.querySelector('.copy'); if(b) b.setAttribute('data-copy',val); } };
-    setCopy('latField', latDec); setCopy('lonField', lonDec);
-    const cp=$('coordPair'); if(cp){ cp.textContent=pair; cp.setAttribute('data-copy',pair);
-      const btn=cp.parentElement.querySelector('.copy'); if(btn) btn.setAttribute('data-copy',pair); }
-    const g=encodeURIComponent(pair);
-    const gm=$('gmapLink'); if(gm) gm.href='https://www.google.com/maps/search/?api=1&query='+g;
-    const am=$('amapLink'); if(am) am.href='https://maps.apple.com/?ll='+encodeURIComponent(state.lat+','+state.lon)+'&q=Photo%20Location';
-    const os=$('osmLink'); if(os) os.href='https://www.openstreetmap.org/?mlat='+state.lat+'&mlon='+state.lon+'#map=18/'+state.lat+'/'+state.lon;
-    const mt=$('movedTag'); if(mt) mt.style.display = state.pinMoved ? 'inline-block' : 'none';
-  }
-
-  function field(k,v,copyVal,cls,id){
-    return '<div class="field"><div class="k">'+esc(k)+'</div><div class="v '+(cls||'')+'"'+(id?(' id="'+id+'"'):'')+'>'+
+  /* ---------- readout html helpers ---------- */
+  function field(k,v,copyVal,cls,key){
+    return '<div class="field"><div class="k">'+esc(k)+'</div><div class="v '+(cls||'')+(key?(' '+key):'')+'">'+
       '<span>'+esc(v)+'</span>'+(copyVal?copyBtn(copyVal,k):'')+'</div></div>';
   }
   function copyBtn(val,label){
     return '<button class="copy" data-copy="'+esc(val)+'" data-label="'+esc(label||'Copied')+'" title="Copy" aria-label="Copy '+esc(label||'')+'">'+
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>';
   }
-  function compass(deg){
-    const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-    return dirs[Math.round(((deg%360)/22.5))%16];
-  }
 
-  /* ---------- reverse geocoding (graceful) ----------
-     Looks up the address and uses it to PRE-FILL the caption box — but only
-     while the user hasn't typed their own caption (state.captionEdited). */
-  async function reverseGeocode(lat,lon){
-    const cap=$('captionField');
-    try{
-      const ctrl=new AbortController();
-      const t=setTimeout(()=>ctrl.abort(),7000);
-      const r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lon+'&zoom=18',
-        {headers:{'Accept':'application/json'},signal:ctrl.signal});
-      clearTimeout(t);
-      const j=await r.json();
-      if(j && j.display_name){
-        state.address=j.display_name;
-        if(!state.captionEdited){
-          state.caption=j.display_name;
-          if(cap) cap.value=j.display_name;
-        }
-      }else if(cap && !state.captionEdited){ cap.placeholder='Address unavailable — type a caption'; }
-    }catch(_){ if(cap && !state.captionEdited) cap.placeholder='Address lookup unavailable (offline) — type a caption'; }
-  }
-
-  /* ---------- map ---------- */
+  /* ---------- map tiles ---------- */
   function tileLayerFor(type){
     if(type==='satellite')
       return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -735,212 +549,452 @@ body{
       {maxZoom:19,crossOrigin:true,attribution:'© OpenStreetMap contributors'});
   }
 
-  function syncMapHeight(){
-    if(!map) return;
-    if(!isPhone()){
-      const h=preview.clientHeight;
-      if(h) $('map').style.height=h+'px';
-    }else{
-      $('map').style.height='300px';
-    }
-    map.invalidateSize();
-  }
-  window.addEventListener('resize',()=>{ if(map) syncMapHeight(); });
-
-  function renderMap(lat,lon){
-    return new Promise(resolve=>{
-      const el=$('map'); el.innerHTML='';
-      syncMapHeight();
-      setTimeout(()=>{
-        map=L.map(el,{preferCanvas:false,zoomControl:true}).setView([lat,lon],16);
-        const type=document.querySelector('input[name="mapType"]:checked').value;
-        tileLayerFor(type).addTo(map);
-        marker=L.marker([lat,lon],{icon:pinIcon,draggable:true,autoPan:true}).addTo(map);
-        marker.bindPopup(popupHtml()).openPopup();
-        marker.on('drag',()=>{ const p=marker.getLatLng(); marker.setPopupContent(popupHtml(p.lat,p.lng)); });
-        marker.on('dragend',onPinMoved);
-        setCone(state.heading);     // restore the heading cone after (re)build
-        L.control.scale({metric:true,imperial:true,position:'bottomright'}).addTo(map);
-        map.on('zoomend',()=>{ zoomReadout.textContent='z'+map.getZoom(); });
-        zoomReadout.textContent='z'+map.getZoom();
-        setTimeout(()=>{ map.invalidateSize(); resolve(); },180);
-      },80);
-    });
+  /* ---------- HEIC ---------- */
+  async function toDisplayable(file,onStatus){
+    if(!/\.heic$/i.test(file.name) && file.type!=='image/heic') return file;
+    if(onStatus) onStatus('Converting HEIC…','loading');
+    const blob=await heic2any({blob:file,toType:'image/jpeg',quality:0.9});
+    return new File([Array.isArray(blob)?blob[0]:blob], file.name.replace(/\.heic$/i,'.jpg'), {type:'image/jpeg'});
   }
 
-  function popupHtml(lat,lon){
-    lat=(lat!=null?lat:state.lat); lon=(lon!=null?lon:state.lon);
-    const pair=lat.toFixed(6)+', '+lon.toFixed(6);
-    const title=state.pinMoved ? '📍 Adjusted location' : '📍 Photo location';
-    return '<strong>'+title+'</strong><br>'+pair+'<br><span style="color:#8b8e94">drag to adjust</span>';
+  /* ---------- polite reverse-geocode queue ----------
+     Nominatim asks for <=1 req/sec, and several photos can land at once, so
+     address lookups are run one at a time with a small gap between them. */
+  let gcChain=Promise.resolve();
+  function queueGeocode(fn){
+    gcChain=gcChain.then(fn).catch(()=>{}).then(()=>new Promise(r=>setTimeout(r,1100)));
   }
 
-  // Pin was dragged: adopt the new coordinates, flag the manual move, and refresh
-  // every coordinate-dependent part of the UI (readout, links, popup, address).
-  function onPinMoved(){
-    const p=marker.getLatLng();
-    if(!state.pinMoved){ state.origLat=state.lat; state.origLon=state.lon; state.pinMoved=true; }
-    state.lat=p.lat; state.lon=p.lng;
-    updateCoordReadout();
-    marker.setPopupContent(popupHtml());
-    reverseGeocode(state.lat,state.lon);   // refresh suggested address (won't clobber edited caption)
-  }
-
-  // re-render map when style changes
-  document.querySelectorAll('input[name="mapType"]').forEach(r=>{
-    r.addEventListener('change',async()=>{
-      document.querySelectorAll('#mapTypes label').forEach(l=>l.classList.remove('active'));
-      r.closest('label').classList.add('active');
-      if(state.lat!=null){
-        const z=map?map.getZoom():16;
-        if(map){ map.remove(); map=null; marker=null; }
-        await renderMap(state.lat,state.lon);
-        if(map) map.setZoom(z);
-      }
-    });
-  });
-
-  // keep map square-matched to photo on desktop
-  if('ResizeObserver' in window){
-    new ResizeObserver(()=>{ if(map && !isPhone()) syncMapHeight(); }).observe(preview);
-  }
-
-  /* ---------- export composite ---------- */
-  async function buildExport(){
-    if(state.lat==null) return;
-    setStatus('Rendering report image…','loading');
-
-    const scale=2, gap=18, radius=14, maxW=1180, captureScale=2;
-    const ar=(preview.naturalHeight/preview.naturalWidth)||1;
-    // Both panels share the SAME rectangle, mirroring the on-screen two-pane view.
-    // Photo width capped at half the canvas; the map takes an identical rectangle.
-    const panelW=Math.round(Math.min(preview.naturalWidth, (maxW-gap)/2));
-    const imgW=panelW, imgH=Math.round(panelW*ar);
-    const mapW=panelW, mapH=imgH;
-    const W=imgW+mapW+gap;
-
-    // Caption bar height adapts to its content (wrapped caption + optional
-    // "pin moved" note) so nothing is ever clipped.
-    const capFont='12px "IBM Plex Mono", monospace';
-    const capLines=wrapLines(state.caption, W, capFont, 3);
-    const lineH=18;
-    const captionH=14 /*top*/ + 24 /*coord line*/ + capLines.length*lineH
-                   + (state.pinMoved?lineH:0) + 24 /*footer*/ + 12 /*bottom*/;
-    const H=imgH+captionH;
-
-    const canvas=exportCanvas, ctx=canvas.getContext('2d');
-    canvas.width=W*scale; canvas.height=H*scale;
-    canvas.style.width=W+'px';
-    canvas.style.height='';  // let CSS height:auto scale proportionally when max-width constrains width
-    ctx.scale(scale,scale);
-    ctx.fillStyle='#fbf9f4'; ctx.fillRect(0,0,W,H);
-
-    const round=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();};
-
-    // photo
-    await new Promise((res,rej)=>{
-      const im=new Image();
-      im.onload=()=>{ ctx.save();round(0,0,imgW,imgH,radius);ctx.clip();
-        ctx.drawImage(im,0,0,imgW,imgH);ctx.restore();res(); };
-      im.onerror=rej; im.src=displaySrc;
-    });
-
-    // map — render a clean offscreen copy at the EXACT panel size, then html2canvas it
-    const off=document.createElement('div');
-    Object.assign(off.style,{width:mapW+'px',height:mapH+'px',position:'absolute',left:'-10000px',top:'0',overflow:'hidden'});
-    document.body.appendChild(off);
-    const cleanMap=L.map(off,{zoomControl:false,attributionControl:false,dragging:false,
-      scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false,tap:false,
-      fadeAnimation:false,zoomAnimation:false,inertia:false})
-      .setView([state.lat,state.lon], map?map.getZoom():16);
-    const type=document.querySelector('input[name="mapType"]:checked').value;
-    tileLayerFor(type).addTo(cleanMap);
-    cleanMap.invalidateSize(false);   // lock Leaflet to the real container size
-
+  /* ---------- shared export modal ---------- */
+  let currentBlob=null, currentName='geotag.png';
+  async function openExport(photo){
+    const btn=photo.buildBtn, label=btn.innerHTML;
+    btn.disabled=true; btn.innerHTML='Rendering…';
     try{
-      await new Promise(r=>setTimeout(r,1200));   // let tiles settle
-      cleanMap.invalidateSize(false);
-      // Capture the element at its OWN size. We deliberately do NOT pass
-      // width/height/windowWidth/windowHeight: forcing those makes html2canvas
-      // re-lay-out the cloned document and (with Leaflet's translate3d tile
-      // panes) can hand back a canvas whose aspect ratio no longer matches
-      // mapW:mapH — which is exactly what was stretching the map.
-      const mapCanvas=await html2canvas(off,{useCORS:true,allowTaint:false,
-        backgroundColor:'#e7e2d6',scale:captureScale,logging:false});
-      const mx=imgW+gap;
-      ctx.save();round(mx,0,mapW,mapH,radius);ctx.clip();
-      // Cover-fit (centre-crop) rather than stretch-to-fit. Whatever dimensions
-      // html2canvas returns, the map is scaled uniformly — never squished. The
-      // map is centred on the pin, so the crop stays centred on it too.
-      drawCover(ctx, mapCanvas, mx, 0, mapW, mapH);
-      const tipX=mx+mapW/2, tipY=mapH/2;   // pin tip = geographic point
-      // heading cone (drawn under the pin), pointing where the camera faced
-      if(state.heading!=null){
-        const R=54, half=30*Math.PI/180, up=-Math.PI/2;
-        ctx.save();
-        ctx.translate(tipX,tipY);
-        ctx.rotate(state.heading*Math.PI/180);   // 0°=N=up, clockwise like a compass
-        ctx.beginPath(); ctx.moveTo(0,0);
-        ctx.arc(0,0,R, up-half, up+half); ctx.closePath();
-        ctx.fillStyle='rgba(239,93,18,.30)'; ctx.fill();
-        ctx.lineWidth=2; ctx.strokeStyle='rgba(197,68,5,.85)'; ctx.stroke();
-        ctx.restore();
+      const blob=await photo.buildExport();
+      if(!blob) return;
+      currentBlob=blob; currentName=photo.filename();
+      const shareBtn=$('shareImgBtn');
+      shareBtn.hidden = !(navigator.canShare && navigator.canShare({files:[new File([blob],currentName,{type:'image/png'})]}));
+      overlay.classList.add('show');
+    }catch(e){ console.error('export',e); ping('Could not build report'); }
+    finally{ btn.disabled=false; btn.innerHTML=label; }
+  }
+
+  /* ---------- per-photo card ---------- */
+  let nextId=0;
+  const photos=[];
+
+  function updateCount(){
+    wsCount.textContent = photos.length ? (photos.length+(photos.length===1?' photo':' photos')) : '';
+  }
+
+  function createPhoto(file){
+    const id=++nextId;
+    const card=document.createElement('section');
+    card.className='card';
+    card.innerHTML=
+      '<div class="card-bar">'+
+        '<span class="card-num">#'+id+'</span>'+
+        '<span class="card-title">'+esc(file.name)+'</span>'+
+        '<button class="card-remove" title="Remove photo" aria-label="Remove photo">✕</button>'+
+      '</div>'+
+      '<div class="canvas-row">'+
+        '<div class="pane">'+
+          '<div class="pane-head"><span><span class="dot"></span>Photo</span><span class="dimReadout">—</span></div>'+
+          '<img class="cphoto" alt="Uploaded photo preview">'+
+        '</div>'+
+        '<div class="pane map-pane">'+
+          '<div class="pane-head"><span><span class="dot"></span>Location</span><span class="zoomReadout">—</span></div>'+
+          '<div class="cmap"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="creadout"></div>'+
+      '<div class="status card-status"></div>'+
+      '<div class="card-actions"><button class="btn accent cbuild" disabled>⧉ Build report image</button></div>';
+    cardsEl.appendChild(card);
+
+    const photoImg=card.querySelector('.cphoto'),
+          mapEl=card.querySelector('.cmap'),
+          mapPane=card.querySelector('.map-pane'),
+          canvasRow=card.querySelector('.canvas-row'),
+          readoutEl=card.querySelector('.creadout'),
+          dimEl=card.querySelector('.dimReadout'),
+          zoomEl=card.querySelector('.zoomReadout'),
+          statusC=card.querySelector('.card-status'),
+          buildBtn=card.querySelector('.cbuild'),
+          removeBtn=card.querySelector('.card-remove');
+    const q=sel=>readoutEl.querySelector(sel);
+
+    let map=null, marker=null, displaySrc=null, ro=null;
+    const state={lat:null,lon:null,heading:null,caption:'',captionEdited:false,
+                 address:null,pinMoved:false,origLat:null,origLon:null};
+
+    function cstat(msg,type){
+      statusC.className='status card-status show '+(type||'ok');
+      statusC.innerHTML=(type==='loading'?'<span class="spinner"></span>':'')+'<span>'+esc(msg)+'</span>';
+    }
+
+    /* ----- load pipeline ----- */
+    async function load(){
+      cstat('Reading image…','loading');
+      try{
+        const displayFile=await toDisplayable(file,cstat);
+        displaySrc=URL.createObjectURL(displayFile);
+        await new Promise((res,rej)=>{
+          photoImg.onload=()=>{ dimEl.textContent=photoImg.naturalWidth+' × '+photoImg.naturalHeight+' px'; res(); };
+          photoImg.onerror=rej;
+          photoImg.src=displaySrc;
+        });
+
+        // EXIF is read from the ORIGINAL file (conversion can drop metadata)
+        let exif={}, gps=null;
+        try{
+          const [parsed,g]=await Promise.all([
+            exifr.parse(file,{tiff:true,exif:true,gps:true}).catch(()=>({})),
+            exifr.gps(file).catch(()=>null)
+          ]);
+          exif=parsed||{}; gps=g;
+        }catch(_){}
+
+        if(!gps || gps.latitude==null){
+          cstat('No GPS data in this photo — showing available metadata.','warn');
+          canvasRow.classList.add('solo'); mapPane.remove();
+          renderReadout(exif,null);
+          buildBtn.disabled=true;
+          return;
+        }
+
+        state.lat=gps.latitude; state.lon=gps.longitude;
+        state.heading=(typeof exif.GPSImgDirection==='number')?exif.GPSImgDirection:null;
+        cstat('GPS location found','ok');
+        renderReadout(exif,gps);
+        await renderMap();
+        buildBtn.disabled=false;
+        queueGeocode(()=>reverseGeocode(state.lat,state.lon));
+      }catch(err){
+        console.error(err);
+        cstat('Could not process this image. Try another file.','err');
       }
-      // draw pin at centre
-      const pin=new Image();
-      await new Promise(r=>{ pin.onload=r; pin.onerror=r; pin.src='data:image/svg+xml,'+PIN_SVG; });
-      const pw=34,ph=44;
-      ctx.drawImage(pin, tipX-pw/2, tipY-ph, pw, ph);
-      ctx.restore();
-    }catch(e){
-      console.error('map capture',e);
-      ctx.save();round(imgW+gap,0,mapW,mapH,radius);ctx.clip();
-      ctx.fillStyle='#e7e2d6';ctx.fillRect(imgW+gap,0,mapW,mapH);
-      ctx.fillStyle='#8b8e94';ctx.font='13px monospace';ctx.textAlign='center';
-      ctx.fillText('map unavailable',imgW+gap+mapW/2,mapH/2);ctx.restore();
-    }finally{
-      cleanMap.remove(); document.body.removeChild(off);
     }
 
-    // caption bar
-    const cy=imgH+14;
-    ctx.textAlign='left';
-    ctx.fillStyle='#ef5d12'; ctx.fillRect(0,cy,46,3);
-    let y=cy+21;
-    ctx.fillStyle='#1a1c1e'; ctx.font='600 13px "IBM Plex Mono", monospace';
-    const coord='LAT '+state.lat.toFixed(6)+'°   LON '+state.lon.toFixed(6)+'°'+
-      (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'');
-    ctx.fillText(coord, 0, y);
-    // caption (user text, wrapped)
-    ctx.fillStyle='#52555b'; ctx.font=capFont;
-    for(const line of capLines){ y+=lineH; ctx.fillText(line, 0, y); }
-    // manual-move note
-    if(state.pinMoved){
-      y+=lineH;
-      ctx.fillStyle='#c54405'; ctx.font='600 11px "IBM Plex Mono", monospace';
-      ctx.fillText('⚠ PIN POSITION MANUALLY ADJUSTED', 0, y);
+    /* ----- readout ----- */
+    function renderReadout(exif,gps){
+      const rows=[];
+      const dt=exif.DateTimeOriginal||exif.CreateDate||exif.ModifyDate;
+      const dateStr=dt instanceof Date && !isNaN(dt)
+        ? dt.toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
+        : '—';
+      const camera=[exif.Make,exif.Model].filter(Boolean).join(' ').trim()||'—';
+
+      if(gps){
+        const latDec=state.lat.toFixed(7), lonDec=state.lon.toFixed(7);
+        rows.push(field('Latitude', latDec+'°', latDec, 'span2', 'f-lat'));
+        rows.push(field('Longitude', lonDec+'°', lonDec, 'span2', 'f-lon'));
+        rows.push(field('Latitude (DMS)', toDMS(state.lat,true), null, 'span2', 'f-latdms'));
+        rows.push(field('Longitude (DMS)', toDMS(state.lon,false), null, 'span2', 'f-londms'));
+        rows.push(field('Altitude', (typeof exif.GPSAltitude==='number')? exif.GPSAltitude.toFixed(1)+' m' : '—'));
+        // Heading is editable: pre-filled from EXIF when present, otherwise left
+        // blank so a user can add the camera-pointing direction by hand.
+        const hv=state.heading!=null?(' value="'+Math.round(state.heading)+'"'):'';
+        const hc=state.heading!=null?('° '+compass(state.heading)):'set direction';
+        rows.push(
+          '<div class="field"><div class="k">Heading</div><div class="v"><div class="hdg-edit">'+
+          '<input class="headingField" type="number" min="0" max="359" step="1" inputmode="numeric" placeholder="—"'+hv+'>'+
+          '<span class="compass headingCompass">'+hc+'</span>'+
+          '</div></div></div>'
+        );
+      }
+      rows.push(field('Captured', dateStr));
+      rows.push(field('Camera', camera));
+      if(gps){
+        const pair=state.lat.toFixed(6)+', '+state.lon.toFixed(6);
+        rows.push(
+          '<div class="field wide"><div class="k">Coordinates <span class="moved-tag movedTag" style="display:none">adjusted</span></div>'+
+          '<div class="v"><span class="coordPair" data-copy="'+pair+'">'+pair+'</span>'+
+          copyBtn(pair)+'</div></div>'
+        );
+        // Caption replaces the old read-only Address field. It is auto-filled from
+        // the reverse-geocoded address (see reverseGeocode) but is freely editable,
+        // and it is what gets printed at the bottom of the exported report image.
+        rows.push(
+          '<div class="field wide"><div class="k">Caption</div>'+
+          '<textarea class="cap-input captionField" rows="2" '+
+          'placeholder="Looking up address… (or type your own caption)">'+esc(state.caption||'')+'</textarea>'+
+          '</div>'
+        );
+        rows.push(
+          '<div class="field wide"><div class="k">Open in</div><div class="v"><div class="maplinks">'+
+          '<a class="maplink gmapLink" target="_blank" rel="noopener" href="#">▸ Google Maps</a>'+
+          '<a class="maplink amapLink" target="_blank" rel="noopener" href="#">▸ Apple Maps</a>'+
+          '<a class="maplink osmLink" target="_blank" rel="noopener" href="#">▸ OpenStreetMap</a>'+
+          '</div></div></div>'
+        );
+      }
+
+      readoutEl.innerHTML='<div class="readout-grid">'+rows.join('')+'</div>';
+
+      readoutEl.querySelectorAll('.copy').forEach(b=>{
+        b.addEventListener('click',()=>copyText(b.dataset.copy, b.dataset.label||'Copied'));
+      });
+
+      if(gps){
+        updateCoordReadout();
+        const cap=q('.captionField');
+        if(cap) cap.addEventListener('input',()=>{ state.caption=cap.value; state.captionEdited=true; });
+        const hf=q('.headingField');
+        if(hf) hf.addEventListener('input',()=>{
+          let v=parseInt(hf.value,10);
+          if(isNaN(v)){ state.heading=null; }
+          else{ v=((v%360)+360)%360; state.heading=v; }
+          const hc=q('.headingCompass');
+          if(hc) hc.textContent = state.heading!=null ? ('° '+compass(state.heading)) : 'set direction';
+          setCone(state.heading);
+        });
+      }
     }
-    y+=22;
-    ctx.fillStyle='#8b8e94'; ctx.font='10px "IBM Plex Mono", monospace';
-    ctx.fillText('GEOTAG · FIELD INSPECTION MAPPER', 0, y);
 
-    exportBlob=await new Promise(res=>canvas.toBlob(res,'image/png'));
-    clearStatus();
-    setStatus('GPS location found','ok');
+    // Refresh coordinate-dependent parts of the readout (first render + pin drag).
+    function updateCoordReadout(){
+      if(state.lat==null) return;
+      const latDec=state.lat.toFixed(7), lonDec=state.lon.toFixed(7);
+      const pair=state.lat.toFixed(6)+', '+state.lon.toFixed(6);
+      const set=(sel,txt)=>{ const e=q(sel); if(e){ const s=e.querySelector('span'); (s||e).textContent=txt; } };
+      set('.f-lat', latDec+'°'); set('.f-lon', lonDec+'°');
+      set('.f-latdms', toDMS(state.lat,true)); set('.f-londms', toDMS(state.lon,false));
+      const setCopy=(sel,val)=>{ const e=q(sel); if(e){ const b=e.querySelector('.copy'); if(b) b.setAttribute('data-copy',val); } };
+      setCopy('.f-lat', latDec); setCopy('.f-lon', lonDec);
+      const cp=q('.coordPair'); if(cp){ cp.textContent=pair; cp.setAttribute('data-copy',pair);
+        const btn=cp.parentElement.querySelector('.copy'); if(btn) btn.setAttribute('data-copy',pair); }
+      const g=encodeURIComponent(pair);
+      const gm=q('.gmapLink'); if(gm) gm.href='https://www.google.com/maps/search/?api=1&query='+g;
+      const am=q('.amapLink'); if(am) am.href='https://maps.apple.com/?ll='+encodeURIComponent(state.lat+','+state.lon)+'&q=Photo%20Location';
+      const os=q('.osmLink'); if(os) os.href='https://www.openstreetmap.org/?mlat='+state.lat+'&mlon='+state.lon+'#map=18/'+state.lat+'/'+state.lon;
+      const mt=q('.movedTag'); if(mt) mt.style.display = state.pinMoved ? 'inline-block' : 'none';
+    }
+
+    /* ----- reverse geocoding (prefills caption unless user typed) ----- */
+    async function reverseGeocode(lat,lon){
+      const cap=q('.captionField');
+      try{
+        const ctrl=new AbortController();
+        const t=setTimeout(()=>ctrl.abort(),7000);
+        const r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='+lat+'&lon='+lon+'&zoom=18',
+          {headers:{'Accept':'application/json'},signal:ctrl.signal});
+        clearTimeout(t);
+        const j=await r.json();
+        if(j && j.display_name){
+          state.address=j.display_name;
+          if(!state.captionEdited){
+            state.caption=j.display_name;
+            if(cap) cap.value=j.display_name;
+          }
+        }else if(cap && !state.captionEdited){ cap.placeholder='Address unavailable — type a caption'; }
+      }catch(_){ if(cap && !state.captionEdited) cap.placeholder='Address lookup unavailable (offline) — type a caption'; }
+    }
+
+    /* ----- map ----- */
+    function syncMapHeight(){
+      if(!map) return;
+      if(!isPhone()){ const h=photoImg.clientHeight; if(h) mapEl.style.height=h+'px'; }
+      else mapEl.style.height='300px';
+      map.invalidateSize();
+    }
+
+    function setCone(deg){
+      if(!marker || !marker._icon) return;
+      const holder=marker._icon.querySelector('.geo-cone-holder');
+      if(!holder) return;
+      if(deg==null || isNaN(deg)){ holder.style.display='none'; }
+      else{ holder.style.display='block'; holder.style.transform='rotate('+deg+'deg)'; }
+    }
+
+    function popupHtml(lat,lon){
+      lat=(lat!=null?lat:state.lat); lon=(lon!=null?lon:state.lon);
+      const pair=lat.toFixed(6)+', '+lon.toFixed(6);
+      const title=state.pinMoved ? '📍 Adjusted location' : '📍 Photo location';
+      return '<strong>'+title+'</strong><br>'+pair+'<br><span style="color:#8b8e94">drag to adjust</span>';
+    }
+
+    function onPinMoved(){
+      const p=marker.getLatLng();
+      if(!state.pinMoved){ state.origLat=state.lat; state.origLon=state.lon; state.pinMoved=true; }
+      state.lat=p.lat; state.lon=p.lng;
+      updateCoordReadout();
+      marker.setPopupContent(popupHtml());
+      queueGeocode(()=>reverseGeocode(state.lat,state.lon));
+    }
+
+    function renderMap(){
+      return new Promise(resolve=>{
+        mapEl.innerHTML='';
+        syncMapHeight();
+        setTimeout(()=>{
+          map=L.map(mapEl,{preferCanvas:false,zoomControl:true}).setView([state.lat,state.lon],16);
+          tileLayerFor(currentMapType()).addTo(map);
+          marker=L.marker([state.lat,state.lon],{icon:pinIcon,draggable:true,autoPan:true}).addTo(map);
+          marker.bindPopup(popupHtml()).openPopup();
+          marker.on('drag',()=>{ const p=marker.getLatLng(); marker.setPopupContent(popupHtml(p.lat,p.lng)); });
+          marker.on('dragend',onPinMoved);
+          setCone(state.heading);
+          L.control.scale({metric:true,imperial:true,position:'bottomright'}).addTo(map);
+          map.on('zoomend',()=>{ zoomEl.textContent='z'+map.getZoom(); });
+          zoomEl.textContent='z'+map.getZoom();
+          setTimeout(()=>{ map.invalidateSize(); resolve(); },180);
+        },80);
+      });
+    }
+
+    function restyleMap(){
+      if(state.lat==null || !map) return;
+      const z=map.getZoom(), c=map.getCenter();
+      map.remove(); map=null; marker=null;
+      renderMap().then(()=>{ if(map) map.setView(c,z); });
+    }
+
+    /* ----- export composite (one report per photo) ----- */
+    async function buildExport(){
+      if(state.lat==null) return null;
+      cstat('Rendering report image…','loading');
+
+      const scale=2, gap=18, radius=14, maxW=1180, captureScale=2;
+      const ar=(photoImg.naturalHeight/photoImg.naturalWidth)||1;
+      const panelW=Math.round(Math.min(photoImg.naturalWidth, (maxW-gap)/2));
+      const imgW=panelW, imgH=Math.round(panelW*ar);
+      const mapW=panelW, mapH=imgH;
+      const W=imgW+mapW+gap;
+
+      const capFont='12px "IBM Plex Mono", monospace';
+      const capLines=wrapLines(state.caption, W, capFont, 3);
+      const lineH=18;
+      const captionH=14 + 24 + capLines.length*lineH + (state.pinMoved?lineH:0) + 24 + 12;
+      const H=imgH+captionH;
+
+      const canvas=exportCanvas, ctx=canvas.getContext('2d');
+      canvas.width=W*scale; canvas.height=H*scale;
+      canvas.style.width=W+'px'; canvas.style.height='';
+      ctx.scale(scale,scale);
+      ctx.fillStyle='#fbf9f4'; ctx.fillRect(0,0,W,H);
+
+      const round=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();};
+
+      // photo
+      await new Promise((res,rej)=>{
+        const im=new Image();
+        im.onload=()=>{ ctx.save();round(0,0,imgW,imgH,radius);ctx.clip();
+          ctx.drawImage(im,0,0,imgW,imgH);ctx.restore();res(); };
+        im.onerror=rej; im.src=displaySrc;
+      });
+
+      // map — render a clean offscreen copy at the EXACT panel size, then html2canvas it
+      const off=document.createElement('div');
+      Object.assign(off.style,{width:mapW+'px',height:mapH+'px',position:'absolute',left:'-10000px',top:'0',overflow:'hidden'});
+      document.body.appendChild(off);
+      const cleanMap=L.map(off,{zoomControl:false,attributionControl:false,dragging:false,
+        scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false,tap:false,
+        fadeAnimation:false,zoomAnimation:false,inertia:false})
+        .setView([state.lat,state.lon], map?map.getZoom():16);
+      tileLayerFor(currentMapType()).addTo(cleanMap);
+      cleanMap.invalidateSize(false);
+
+      try{
+        await new Promise(r=>setTimeout(r,1200));
+        cleanMap.invalidateSize(false);
+        const mapCanvas=await html2canvas(off,{useCORS:true,allowTaint:false,
+          backgroundColor:'#e7e2d6',scale:captureScale,logging:false});
+        const mx=imgW+gap;
+        ctx.save();round(mx,0,mapW,mapH,radius);ctx.clip();
+        drawCover(ctx, mapCanvas, mx, 0, mapW, mapH);
+        const tipX=mx+mapW/2, tipY=mapH/2;
+        if(state.heading!=null){
+          const R=54, half=30*Math.PI/180, up=-Math.PI/2;
+          ctx.save();
+          ctx.translate(tipX,tipY);
+          ctx.rotate(state.heading*Math.PI/180);
+          ctx.beginPath(); ctx.moveTo(0,0);
+          ctx.arc(0,0,R, up-half, up+half); ctx.closePath();
+          ctx.fillStyle='rgba(239,93,18,.30)'; ctx.fill();
+          ctx.lineWidth=2; ctx.strokeStyle='rgba(197,68,5,.85)'; ctx.stroke();
+          ctx.restore();
+        }
+        const pin=new Image();
+        await new Promise(r=>{ pin.onload=r; pin.onerror=r; pin.src='data:image/svg+xml,'+PIN_SVG; });
+        const pw=34,ph=44;
+        ctx.drawImage(pin, tipX-pw/2, tipY-ph, pw, ph);
+        ctx.restore();
+      }catch(e){
+        console.error('map capture',e);
+        ctx.save();round(imgW+gap,0,mapW,mapH,radius);ctx.clip();
+        ctx.fillStyle='#e7e2d6';ctx.fillRect(imgW+gap,0,mapW,mapH);
+        ctx.fillStyle='#8b8e94';ctx.font='13px monospace';ctx.textAlign='center';
+        ctx.fillText('map unavailable',imgW+gap+mapW/2,mapH/2);ctx.restore();
+      }finally{
+        cleanMap.remove(); document.body.removeChild(off);
+      }
+
+      // caption bar
+      const cy=imgH+14;
+      ctx.textAlign='left';
+      ctx.fillStyle='#ef5d12'; ctx.fillRect(0,cy,46,3);
+      let y=cy+21;
+      ctx.fillStyle='#1a1c1e'; ctx.font='600 13px "IBM Plex Mono", monospace';
+      const coord='LAT '+state.lat.toFixed(6)+'°   LON '+state.lon.toFixed(6)+'°'+
+        (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'');
+      ctx.fillText(coord, 0, y);
+      ctx.fillStyle='#52555b'; ctx.font=capFont;
+      for(const line of capLines){ y+=lineH; ctx.fillText(line, 0, y); }
+      if(state.pinMoved){
+        y+=lineH;
+        ctx.fillStyle='#c54405'; ctx.font='600 11px "IBM Plex Mono", monospace';
+        ctx.fillText('⚠ PIN POSITION MANUALLY ADJUSTED', 0, y);
+      }
+      y+=22;
+      ctx.fillStyle='#8b8e94'; ctx.font='10px "IBM Plex Mono", monospace';
+      ctx.fillText('GEOTAG · FIELD INSPECTION MAPPER', 0, y);
+
+      const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));
+      cstat('GPS location found','ok');
+      return blob;
+    }
+
+    function filename(){
+      const c=state.lat!=null?(state.lat.toFixed(5)+'_'+state.lon.toFixed(5)):'photo';
+      return 'geotag_'+c.replace(/[^\w.-]/g,'')+'.png';
+    }
+
+    function remove(){
+      if(ro) ro.disconnect();
+      if(map){ map.remove(); map=null; marker=null; }
+      if(displaySrc){ URL.revokeObjectURL(displaySrc); displaySrc=null; }
+      card.remove();
+      const i=photos.indexOf(inst); if(i>=0) photos.splice(i,1);
+      updateCount();
+      if(!photos.length) workspace.classList.remove('show');
+    }
+
+    if('ResizeObserver' in window){
+      ro=new ResizeObserver(()=>{ if(map && !isPhone()) syncMapHeight(); });
+      ro.observe(photoImg);
+    }
+
+    const inst={ buildBtn, buildExport, filename, restyleMap, syncMapHeight, remove };
+    buildBtn.addEventListener('click',()=>openExport(inst));
+    removeBtn.addEventListener('click',remove);
+    photos.push(inst);
+    updateCount();
+    load();
+    return inst;
   }
 
-  async function openExport(){
-    exportBtn.disabled=true;
-    await buildExport();
-    exportBtn.disabled=false;
-    const shareBtn=$('shareImgBtn');
-    shareBtn.hidden = !(navigator.canShare && exportBlob && navigator.canShare({files:[new File([exportBlob],'geotag.png',{type:'image/png'})]}));
-    overlay.classList.add('show');
-  }
-
-  function filename(){
-    const c=state.lat!=null?(state.lat.toFixed(5)+'_'+state.lon.toFixed(5)):'photo';
-    return 'geotag_'+c.replace(/[^\w.-]/g,'')+'.png';
+  /* ---------- intake ---------- */
+  function addFiles(list){
+    const files=Array.from(list||[]);
+    const good=files.filter(validImage);
+    if(!good.length){ setStatus('Please choose JPG, PNG or HEIC files.','err'); return; }
+    if(good.length<files.length) setStatus('Some files were skipped (only JPG, PNG, HEIC).','warn');
+    else clearStatus();
+    workspace.classList.add('show');
+    good.forEach(createPhoto);
   }
 
   /* ---------- events ---------- */
@@ -952,42 +1006,51 @@ body{
   dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('over'));
   dropzone.addEventListener('drop',e=>{
     e.preventDefault();dropzone.classList.remove('over');
-    const f=e.dataTransfer.files[0];
-    if(validImage(f)) handleFile(f); else setStatus('Please drop a JPG, PNG or HEIC file.','err');
+    addFiles(e.dataTransfer.files);
   });
-  fileInput.addEventListener('change',e=>{
-    const f=e.target.files[0];
-    if(validImage(f)) handleFile(f); else if(f) setStatus('Please choose a JPG, PNG or HEIC file.','err');
-    fileInput.value='';
+  fileInput.addEventListener('change',e=>{ addFiles(e.target.files); fileInput.value=''; });
+
+  $('clearAllBtn').addEventListener('click',()=>{
+    photos.slice().forEach(p=>p.remove());
+    clearStatus();
+    window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  $('newBtn').addEventListener('click',()=>{ reset(); workspace.classList.remove('show'); clearStatus(); window.scrollTo({top:0,behavior:'smooth'}); });
-  exportBtn.addEventListener('click',openExport);
+  // map style applies to every photo at once
+  document.querySelectorAll('input[name="mapType"]').forEach(r=>{
+    r.addEventListener('change',()=>{
+      document.querySelectorAll('#mapTypes label').forEach(l=>l.classList.remove('active'));
+      r.closest('label').classList.add('active');
+      photos.forEach(p=>p.restyleMap());
+    });
+  });
+
+  window.addEventListener('resize',()=>{ photos.forEach(p=>p.syncMapHeight()); });
+
   $('closeModal').addEventListener('click',()=>overlay.classList.remove('show'));
   overlay.addEventListener('click',e=>{ if(e.target===overlay) overlay.classList.remove('show'); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') overlay.classList.remove('show'); });
 
   $('downloadImgBtn').addEventListener('click',()=>{
-    if(!exportBlob) return;
+    if(!currentBlob) return;
     const a=document.createElement('a');
-    a.href=URL.createObjectURL(exportBlob); a.download=filename(); a.click();
+    a.href=URL.createObjectURL(currentBlob); a.download=currentName; a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href),2000);
     ping('Downloaded ✓');
   });
   $('copyImgBtn').addEventListener('click',async()=>{
-    if(!exportBlob) return;
-    try{ await navigator.clipboard.write([new ClipboardItem({'image/png':exportBlob})]); ping('Image copied ✓'); }
+    if(!currentBlob) return;
+    try{ await navigator.clipboard.write([new ClipboardItem({'image/png':currentBlob})]); ping('Image copied ✓'); }
     catch(_){ ping('Copy not supported — use Download'); }
   });
   $('shareImgBtn').addEventListener('click',async()=>{
-    if(!exportBlob) return;
-    const file=new File([exportBlob],filename(),{type:'image/png'});
+    if(!currentBlob) return;
+    const file=new File([currentBlob],currentName,{type:'image/png'});
     try{ await navigator.share({files:[file],title:'GeoTag inspection'}); }
     catch(_){}
   });
 })();
 </script>
-
 <script>
   // Register the service worker for offline / installable PWA support.
   if('serviceWorker' in navigator){
