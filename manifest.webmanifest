@@ -1,7 +1,7 @@
 {
-  "name": "GeoTag · Field Inspection Mapper",
-  "short_name": "GeoTag",
-  "description": "Read a geotagged photo's GPS entirely on-device, plot it on a map, and export a side-by-side inspection report image. Photos never leave your device.",
+  "name": "GeoTag · Offline Field Inspection Mapper",
+  "short_name": "GeoTag Offline",
+  "description": "Read geotagged photos on-device and export inspection report images without uploading photos, sending coordinates, loading map tiles, or using address lookup.",
   "id": "/",
   "start_url": ".",
   "scope": ".",
