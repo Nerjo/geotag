@@ -1,56 +1,54 @@
-# GeoTag · Field Inspection Mapper
+# GeoTag · Offline Field Inspection Mapper
 
-A standalone, installable app (PWA) that reads a geotagged photo's GPS data
-**entirely on your device**, plots the location on a map, looks up the address,
-and exports a side-by-side **photo + map report image** for inspection reports.
+A standalone, installable app (PWA) that reads geotagged photos on-device and exports inspection report images without uploading photos, sending coordinates, loading third-party map tiles, or using address lookup.
 
-- 📍 Drop a JPG / PNG / HEIC photo → see latitude/longitude (decimal & DMS),
-  altitude, heading, capture time, and camera.
-- 🗺️ Interactive Leaflet map with Street / Satellite / Topo styles.
-- 🧾 One-click "Build report image" — composited photo + map with a coordinate
-  caption, ready to copy, download, or share.
-- 🔒 **100% local.** Photos are read in the browser and never uploaded.
-  Only map tiles and the optional address lookup touch the network.
-- 📴 **Works offline.** All libraries and fonts are vendored and precached by a
-  service worker, so the app opens with no connection. Map tiles for previously
-  viewed areas are cached too.
+This branch is the no-leak duplicate of the original app. It keeps the field workflow, but replaces online maps and reverse geocoding with an offline coordinate panel.
 
-## Install it as an app
+- Drop JPG / PNG / HEIC / HEIF photos and read EXIF/GPS locally in the browser.
+- View decimal latitude/longitude, DMS coordinates, altitude, heading, capture time, and camera model.
+- Edit coordinates manually when source GPS is inaccurate.
+- Edit heading and caption before export.
+- Build one local report image per photo with the photo, offline coordinate panel, coordinates, heading, caption, and adjustment note where applicable.
+- Copy or download the generated PNG locally.
+- Install as a PWA and open the app offline after first load.
 
-It's a Progressive Web App, so it installs from the browser — no app store.
+## What this branch intentionally removed
 
-- **iPhone / iPad (Safari):** Share → *Add to Home Screen*.
-- **Android (Chrome):** menu → *Install app* / *Add to Home Screen*.
-- **Desktop (Chrome / Edge):** click the install icon in the address bar, or
-  menu → *Install GeoTag…*.
+This branch removes all features that send location data outside the browser:
 
-Once installed it launches in its own window like a native app.
+- No OpenStreetMap, Esri, or OpenTopoMap tile requests.
+- No Nominatim reverse-geocode requests.
+- No Google Maps, Apple Maps, or OpenStreetMap outbound links.
+- No Web Share button.
+- No coordinate values in downloaded filenames.
+- No service-worker map tile cache.
+
+The only network traffic required is loading the site files from your own host. After the app shell is cached by the service worker, the app can open offline.
 
 ## Run locally
 
-A PWA needs to be served over HTTP (service workers don't run from `file://`).
-From the repo root:
+A PWA needs to be served over HTTP because service workers do not run from `file://`. From the repo root:
 
 ```bash
 python3 -m http.server 8000
 # then open http://localhost:8000/
 ```
 
-Any static file host works for deployment (GitHub Pages, Netlify, etc.) — just
-serve the repo root over HTTPS.
-
 ## Project layout
 
+```text
+index.html              App shell + offline-only app logic
+manifest.webmanifest    PWA metadata
+sw.js                   Service worker for offline app shell only
+_headers                Netlify/browser security headers
+vendor/                 Vendored offline-capable libraries and fonts
+icons/                  App icons
 ```
-index.html              App shell + all logic
-manifest.webmanifest    PWA metadata (name, icons, theme)
-sw.js                   Service worker (offline shell + tile cache)
-vendor/                 Vendored, offline-capable libraries & fonts
-  leaflet/  exifr/  html2canvas/  heic2any/  fonts/
-icons/                  App icons (192 / 512 / maskable / apple-touch / favicon)
-```
+
+## Deployment note
+
+On Netlify, deploy this branch as a separate site or branch deploy if you want to keep the original online-map version available. Use password protection if inspection locations are sensitive.
 
 ## Updating
 
-Bump `CACHE_VERSION` in `sw.js` whenever any precached asset changes so clients
-pick up the new version.
+Bump `CACHE_VERSION` in `sw.js` whenever any precached asset changes so installed clients pick up the new version.
