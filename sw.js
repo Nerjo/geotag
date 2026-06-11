@@ -2,7 +2,7 @@
    Bump CACHE_VERSION whenever any precached asset changes. */
 "use strict";
 
-const CACHE_VERSION = "geotag-v2";
+const CACHE_VERSION = "geotag-v3";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const TILE_CACHE = CACHE_VERSION + "-tiles";
 const TILE_MAX = 300; // cap stored map tiles
@@ -22,6 +22,7 @@ const SHELL_ASSETS = [
   "vendor/exifr/full.umd.js",
   "vendor/html2canvas/html2canvas.min.js",
   "vendor/heic2any/heic2any.min.js",
+  "vendor/docx/docx.iife.js",
   "vendor/fonts/ibm-plex.css",
   "vendor/fonts/ibm-plex-mono-400.woff2",
   "vendor/fonts/ibm-plex-mono-500.woff2",

@@ -396,6 +396,7 @@ body{
         <label data-type="topo"><input type="radio" name="mapType" value="topo"><span>Topo</span></label>
       </div>
       <span class="ws-count" id="wsCount"></span>
+      <button class="btn accent" id="exportDocxBtn">⇣ Export all to Word</button>
       <button class="btn ghost" id="clearAllBtn">↺ Clear all</button>
     </div>
 
@@ -424,6 +425,7 @@ body{
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/html2canvas/html2canvas.min.js"></script>
 <script src="vendor/heic2any/heic2any.min.js"></script>
+<script src="vendor/docx/docx.iife.js"></script>
 <script>
 (function(){
   "use strict";
@@ -1014,6 +1016,74 @@ body{
     photos.slice().forEach(p=>p.remove());
     clearStatus();
     window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  /* ---------- export every report into one Word document ----------
+     Reports are rendered sequentially because buildExport() draws onto the
+     shared #exportCanvas; all build buttons are disabled meanwhile so a user
+     can't race the canvas or mutate the photo list mid-batch. */
+  const exportDocxBtn=$('exportDocxBtn');
+  exportDocxBtn.addEventListener('click',async()=>{
+    if(!photos.length) return;
+    if(typeof docx==='undefined'){ ping('Word export unavailable — library not loaded'); return; }
+
+    const label=exportDocxBtn.innerHTML;
+    const batch=photos.slice();
+    const prevDisabled=batch.map(p=>p.buildBtn.disabled);
+    exportDocxBtn.disabled=true;
+    $('clearAllBtn').disabled=true;
+    batch.forEach(p=>p.buildBtn.disabled=true);
+
+    const IMG_W=600; // px @96dpi ≈ 6.25in — fits US Letter inside 1in margins + cell padding
+    const rows=[]; let skipped=0, failed=0;
+
+    try{
+      for(let i=0;i<batch.length;i++){
+        exportDocxBtn.innerHTML='Rendering '+(i+1)+'/'+batch.length+'…';
+        let blob=null;
+        try{ blob=await batch[i].buildExport(); }
+        catch(e){ console.error('word export: photo '+(i+1),e); failed++; continue; }
+        if(!blob){ skipped++; continue; } // no GPS
+        // read dimensions now — the canvas is reused by the next iteration
+        const w=exportCanvas.width, h=exportCanvas.height;
+        const data=await blob.arrayBuffer();
+        rows.push(new docx.TableRow({children:[new docx.TableCell({
+          margins:{top:120,bottom:120,left:120,right:120},
+          children:[new docx.Paragraph({children:[new docx.ImageRun({
+            type:'png', data,
+            transformation:{width:IMG_W,height:Math.round(IMG_W*h/w)}
+          })]})]
+        })]}));
+      }
+
+      if(!rows.length){
+        ping(failed?'Export failed — no reports could be built':'No photos with GPS — nothing to export');
+        return;
+      }
+
+      exportDocxBtn.innerHTML='Building document…';
+      const doc=new docx.Document({sections:[{children:[
+        new docx.Table({width:{size:100,type:docx.WidthType.PERCENTAGE},rows})
+      ]}]});
+      const out=await docx.Packer.toBlob(doc);
+
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(out);
+      a.download='geotag_reports_'+new Date().toISOString().slice(0,10)+'.docx';
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+
+      ping('Word file downloaded ✓'+
+        (skipped?' · '+skipped+' without GPS skipped':'')+
+        (failed?' · '+failed+' failed':''));
+    }catch(e){
+      console.error('word export',e);
+      ping('Word export failed');
+    }finally{
+      exportDocxBtn.disabled=false; exportDocxBtn.innerHTML=label;
+      $('clearAllBtn').disabled=false;
+      batch.forEach((p,i)=>p.buildBtn.disabled=prevDisabled[i]);
+    }
   });
 
   // map style applies to every photo at once
