@@ -297,6 +297,7 @@ body{
   text-transform:uppercase;color:var(--accent-deep);border:1px solid #f3c3a6;
   background:var(--accent-wash);border-radius:6px;padding:2px 6px;
 }
+.accReadout.bad{color:var(--accent-deep);font-weight:600}
 
 /* ---------- multi-photo cards ---------- */
 .ws-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
@@ -529,6 +530,53 @@ body{
     return dirs[Math.round(((deg%360)/22.5))%16];
   }
 
+  /* ---------- GPS accuracy / fix-age helpers ---------- */
+  const ACC_WARN_M=15;    // horizontal accuracy beyond this (m) gets a "verify pin" warning
+  const STALE_FIX_MIN=10; // GPS fix older than the photo by this many minutes may be cached
+
+  function fmtAcc(m){ return m<10 ? m.toFixed(1).replace(/\.0$/,'') : String(Math.round(m)); }
+
+  // GPSHPositioningError is normally a plain number, but stay defensive about
+  // rational pairs and string values from other writers.
+  function parseAccuracy(v){
+    if(v==null) return null;
+    if(typeof v==='number') return isFinite(v)&&v>=0 ? v : null;
+    if(Array.isArray(v)&&v.length===2&&v[1]) return v[0]/v[1];
+    const n=parseFloat(v);
+    return isFinite(n)&&n>=0 ? n : null;
+  }
+
+  // '+05:30' | '-06:00' | 'Z' -> minutes east of UTC, else null
+  function parseUtcOffsetMin(s){
+    if(typeof s!=='string') return null;
+    s=s.trim();
+    if(s==='Z') return 0;
+    const m=/^([+-])(\d{1,2}):?(\d{2})$/.exec(s);
+    if(!m) return null;
+    const v=(+m[2])*60+(+m[3]);
+    return v>18*60 ? null : (m[1]==='-' ? -v : v);
+  }
+
+  // Minutes the GPS fix predates the capture, or null when not computable.
+  // DateTimeOriginal is local wall-clock while the GPS stamps are UTC, so the
+  // comparison is only attempted when OffsetTimeOriginal pins down the zone.
+  function gpsFixAgeMin(exif){
+    const d=exif.DateTimeOriginal;
+    if(!(d instanceof Date)||isNaN(d)) return null;
+    const offMin=parseUtcOffsetMin(exif.OffsetTimeOriginal);
+    if(offMin==null) return null;
+    const ds=exif.GPSDateStamp, ts=exif.GPSTimeStamp;
+    if(typeof ds!=='string'||ts==null) return null;
+    const dm=/^(\d{4})[:-](\d{2})[:-](\d{2})$/.exec(ds.trim());
+    if(!dm) return null;
+    const parts=(Array.isArray(ts)?ts:String(ts).split(':')).map(Number);
+    if(parts.length!==3||parts.some(n=>!isFinite(n))) return null;
+    const gpsUTC=Date.UTC(+dm[1],+dm[2]-1,+dm[3],parts[0],parts[1],parts[2]);
+    const photoUTC=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),
+                            d.getHours(),d.getMinutes(),d.getSeconds())-offMin*60000;
+    return (photoUTC-gpsUTC)/60000;
+  }
+
   /* ---------- readout html helpers ---------- */
   function field(k,v,copyVal,cls,key){
     return '<div class="field"><div class="k">'+esc(k)+'</div><div class="v '+(cls||'')+(key?(' '+key):'')+'">'+
@@ -611,7 +659,7 @@ body{
           '<img class="cphoto" alt="Uploaded photo preview">'+
         '</div>'+
         '<div class="pane map-pane">'+
-          '<div class="pane-head"><span><span class="dot"></span>Location</span><span class="zoomReadout">—</span></div>'+
+          '<div class="pane-head"><span><span class="dot"></span>Location</span><span class="accReadout" style="display:none"></span><span class="zoomReadout">—</span></div>'+
           '<div class="cmap"></div>'+
         '</div>'+
       '</div>'+
@@ -630,19 +678,26 @@ body{
           readoutEl=card.querySelector('.creadout'),
           dimEl=card.querySelector('.dimReadout'),
           zoomEl=card.querySelector('.zoomReadout'),
+          accEl=card.querySelector('.accReadout'),
           statusC=card.querySelector('.card-status'),
           buildBtn=card.querySelector('.cbuild'),
           buildPlainBtn=card.querySelector('.cbuildplain'),
           removeBtn=card.querySelector('.card-remove');
     const q=sel=>readoutEl.querySelector(sel);
 
-    let map=null, marker=null, displaySrc=null, ro=null;
+    let map=null, marker=null, accCircle=null, displaySrc=null, ro=null;
     const state={lat:null,lon:null,heading:null,caption:'',captionEdited:false,
-                 address:null,pinMoved:false,origLat:null,origLon:null};
+                 address:null,pinMoved:false,origLat:null,origLon:null,
+                 accuracy:null,gpsStaleMin:null};
 
     function cstat(msg,type){
       statusC.className='status card-status show '+(type||'ok');
       statusC.innerHTML=(type==='loading'?'<span class="spinner"></span>':'')+'<span>'+esc(msg)+'</span>';
+    }
+    function gpsStatus(){
+      if(state.accuracy!=null && state.accuracy>ACC_WARN_M)
+        cstat('GPS location found — low accuracy ±'+fmtAcc(state.accuracy)+' m, verify pin','warn');
+      else cstat('GPS location found','ok');
     }
 
     /* ----- load pipeline ----- */
@@ -677,7 +732,14 @@ body{
 
         state.lat=gps.latitude; state.lon=gps.longitude;
         state.heading=(typeof exif.GPSImgDirection==='number')?exif.GPSImgDirection:null;
-        cstat('GPS location found','ok');
+        state.accuracy=parseAccuracy(exif.GPSHPositioningError);
+        state.gpsStaleMin=gpsFixAgeMin(exif);
+        if(state.accuracy!=null){
+          accEl.style.display='';
+          accEl.textContent='±'+fmtAcc(state.accuracy)+' m';
+          if(state.accuracy>ACC_WARN_M) accEl.classList.add('bad');
+        }
+        gpsStatus();
         renderReadout(exif,gps);
         await renderMap();
         buildBtn.disabled=false; buildPlainBtn.disabled=false;
@@ -704,6 +766,13 @@ body{
         rows.push(field('Latitude (DMS)', toDMS(state.lat,true), null, 'span2', 'f-latdms'));
         rows.push(field('Longitude (DMS)', toDMS(state.lon,false), null, 'span2', 'f-londms'));
         rows.push(field('Altitude', (typeof exif.GPSAltitude==='number')? exif.GPSAltitude.toFixed(1)+' m' : '—'));
+        // GPS horizontal accuracy straight from the camera; the "low" badge is
+        // durable (unlike the card status) so poor fixes stay flagged.
+        rows.push(
+          '<div class="field"><div class="k">Accuracy'+
+          (state.accuracy!=null && state.accuracy>ACC_WARN_M ? ' <span class="moved-tag">low</span>' : '')+
+          '</div><div class="v"><span>'+(state.accuracy!=null ? '±'+fmtAcc(state.accuracy)+' m' : '—')+'</span></div></div>'
+        );
         // Heading is editable: pre-filled from EXIF when present, otherwise left
         // blank so a user can add the camera-pointing direction by hand.
         const hv=state.heading!=null?(' value="'+Math.round(state.heading)+'"'):'';
@@ -715,7 +784,12 @@ body{
           '</div></div></div>'
         );
       }
-      rows.push(field('Captured', dateStr));
+      rows.push(
+        '<div class="field"><div class="k">Captured'+
+        (state.gpsStaleMin!=null && state.gpsStaleMin>STALE_FIX_MIN
+          ? ' <span class="moved-tag">gps fix '+Math.round(state.gpsStaleMin)+' min older</span>' : '')+
+        '</div><div class="v"><span>'+esc(dateStr)+'</span></div></div>'
+      );
       rows.push(field('Camera', camera));
       if(gps){
         const pair=state.lat.toFixed(6)+', '+state.lon.toFixed(6);
@@ -828,6 +902,7 @@ body{
 
     function onPinMoved(){
       const p=marker.getLatLng();
+      if(accCircle){ map.removeLayer(accCircle); accCircle=null; }
       if(!state.pinMoved){ state.origLat=state.lat; state.origLon=state.lon; state.pinMoved=true; }
       state.lat=p.lat; state.lon=p.lng;
       updateCoordReadout();
@@ -843,6 +918,13 @@ body{
           map=L.map(mapEl,{preferCanvas:false,zoomControl:true}).setView([state.lat,state.lon],16);
           tileLayerFor(currentMapType()).addTo(map);
           marker=L.marker([state.lat,state.lon],{icon:pinIcon,draggable:true,autoPan:true}).addTo(map);
+          // GPS uncertainty ring; once the pin is hand-corrected the camera's
+          // fix no longer describes the shown location, so it stays hidden.
+          if(state.accuracy!=null && !state.pinMoved){
+            accCircle=L.circle([state.lat,state.lon],{radius:state.accuracy,
+              color:'#c54405',weight:1.5,opacity:.7,
+              fillColor:'#ef5d12',fillOpacity:.12,interactive:false}).addTo(map);
+          }
           marker.bindPopup(popupHtml()).openPopup();
           marker.on('drag',()=>{ const p=marker.getLatLng(); marker.setPopupContent(popupHtml(p.lat,p.lng)); });
           marker.on('dragend',onPinMoved);
@@ -858,7 +940,7 @@ body{
     function restyleMap(){
       if(state.lat==null || !map) return;
       const z=map.getZoom(), c=map.getCenter();
-      map.remove(); map=null; marker=null;
+      map.remove(); map=null; marker=null; accCircle=null;
       renderMap().then(()=>{ if(map) map.setView(c,z); });
     }
 
@@ -877,7 +959,13 @@ body{
       const capFont='12px "IBM Plex Mono", monospace';
       const capLines=withCaption ? wrapLines(state.caption, W, capFont, 3) : [];
       const lineH=18;
-      const captionH=withCaption ? 14 + 24 + capLines.length*lineH + (state.pinMoved?lineH:0) + 24 + 12 : 0;
+      // accuracy only describes the camera's fix, so it drops out once the pin
+      // is hand-corrected; staleness is about the metadata and always shows
+      const showAcc=state.accuracy!=null && !state.pinMoved;
+      const lowAcc=showAcc && state.accuracy>ACC_WARN_M;
+      const staleFix=state.gpsStaleMin!=null && state.gpsStaleMin>STALE_FIX_MIN;
+      const warnLines=(state.pinMoved?1:0)+(lowAcc?1:0)+(staleFix?1:0);
+      const captionH=withCaption ? 14 + 24 + capLines.length*lineH + warnLines*lineH + 24 + 12 : 0;
       const H=imgH+captionH;
 
       const canvas=exportCanvas, ctx=canvas.getContext('2d');
@@ -950,7 +1038,8 @@ body{
         let y=cy+21;
         ctx.fillStyle='#1a1c1e'; ctx.font='600 13px "IBM Plex Mono", monospace';
         const coord='LAT '+state.lat.toFixed(6)+'°   LON '+state.lon.toFixed(6)+'°'+
-          (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'');
+          (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'')+
+          (showAcc?'   ±'+fmtAcc(state.accuracy)+'m':'');
         ctx.fillText(coord, 0, y);
         ctx.fillStyle='#52555b'; ctx.font=capFont;
         for(const line of capLines){ y+=lineH; ctx.fillText(line, 0, y); }
@@ -959,13 +1048,23 @@ body{
           ctx.fillStyle='#c54405'; ctx.font='600 11px "IBM Plex Mono", monospace';
           ctx.fillText('⚠ PIN POSITION MANUALLY ADJUSTED', 0, y);
         }
+        if(lowAcc){
+          y+=lineH;
+          ctx.fillStyle='#c54405'; ctx.font='600 11px "IBM Plex Mono", monospace';
+          ctx.fillText('⚠ LOW GPS ACCURACY (±'+fmtAcc(state.accuracy)+' M) — VERIFY PIN LOCATION', 0, y);
+        }
+        if(staleFix){
+          y+=lineH;
+          ctx.fillStyle='#c54405'; ctx.font='600 11px "IBM Plex Mono", monospace';
+          ctx.fillText('⚠ GPS FIX ~'+Math.round(state.gpsStaleMin)+' MIN OLDER THAN PHOTO — MAY PREDATE CAPTURE', 0, y);
+        }
         y+=22;
         ctx.fillStyle='#8b8e94'; ctx.font='10px "IBM Plex Mono", monospace';
         ctx.fillText('GEOTAG · FIELD INSPECTION MAPPER', 0, y);
       }
 
       const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));
-      cstat('GPS location found','ok');
+      gpsStatus();
       return blob;
     }
 
@@ -976,7 +1075,7 @@ body{
 
     function remove(){
       if(ro) ro.disconnect();
-      if(map){ map.remove(); map=null; marker=null; }
+      if(map){ map.remove(); map=null; marker=null; accCircle=null; }
       if(displaySrc){ URL.revokeObjectURL(displaySrc); displaySrc=null; }
       card.remove();
       const i=photos.indexOf(inst); if(i>=0) photos.splice(i,1);
