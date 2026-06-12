@@ -411,7 +411,7 @@ body{
   <div class="modal">
     <button class="modal-close" id="closeModal" aria-label="Close">&times;</button>
     <h3>Report image ready</h3>
-    <div class="hint">Side-by-side photo &amp; map with a coordinate caption — ready for your inspection report.</div>
+    <div class="hint" id="exportHint">Side-by-side photo &amp; map with a coordinate caption — ready for your inspection report.</div>
     <canvas id="exportCanvas"></canvas>
     <div class="modal-actions">
       <button class="btn" id="copyImgBtn">⧉ Copy image</button>
@@ -569,13 +569,17 @@ body{
 
   /* ---------- shared export modal ---------- */
   let currentBlob=null, currentName='geotag.png';
-  async function openExport(photo){
-    const btn=photo.buildBtn, label=btn.innerHTML;
+  async function openExport(photo,btn,withCaption=true){
+    btn=btn||photo.buildBtn;
+    const label=btn.innerHTML;
     btn.disabled=true; btn.innerHTML='Rendering…';
     try{
-      const blob=await photo.buildExport();
+      const blob=await photo.buildExport(withCaption);
       if(!blob) return;
-      currentBlob=blob; currentName=photo.filename();
+      currentBlob=blob; currentName=photo.filename(withCaption?'':'_nocaption');
+      $('exportHint').textContent=withCaption
+        ?'Side-by-side photo & map with a coordinate caption — ready for your inspection report.'
+        :'Side-by-side photo & map, no coordinate caption — ready for copying.';
       const shareBtn=$('shareImgBtn');
       shareBtn.hidden = !(navigator.canShare && navigator.canShare({files:[new File([blob],currentName,{type:'image/png'})]}));
       overlay.classList.add('show');
@@ -613,7 +617,10 @@ body{
       '</div>'+
       '<div class="creadout"></div>'+
       '<div class="status card-status"></div>'+
-      '<div class="card-actions"><button class="btn accent cbuild" disabled>⧉ Build report image</button></div>';
+      '<div class="card-actions">'+
+        '<button class="btn accent cbuild" disabled>⧉ Build report image</button>'+
+        '<button class="btn cbuildplain" disabled>⧉ Build image (no caption)</button>'+
+      '</div>';
     cardsEl.appendChild(card);
 
     const photoImg=card.querySelector('.cphoto'),
@@ -625,6 +632,7 @@ body{
           zoomEl=card.querySelector('.zoomReadout'),
           statusC=card.querySelector('.card-status'),
           buildBtn=card.querySelector('.cbuild'),
+          buildPlainBtn=card.querySelector('.cbuildplain'),
           removeBtn=card.querySelector('.card-remove');
     const q=sel=>readoutEl.querySelector(sel);
 
@@ -672,7 +680,7 @@ body{
         cstat('GPS location found','ok');
         renderReadout(exif,gps);
         await renderMap();
-        buildBtn.disabled=false;
+        buildBtn.disabled=false; buildPlainBtn.disabled=false;
         queueGeocode(()=>reverseGeocode(state.lat,state.lon));
       }catch(err){
         console.error(err);
@@ -855,7 +863,7 @@ body{
     }
 
     /* ----- export composite (one report per photo) ----- */
-    async function buildExport(){
+    async function buildExport(withCaption=true){
       if(state.lat==null) return null;
       cstat('Rendering report image…','loading');
 
@@ -867,9 +875,9 @@ body{
       const W=imgW+mapW+gap;
 
       const capFont='12px "IBM Plex Mono", monospace';
-      const capLines=wrapLines(state.caption, W, capFont, 3);
+      const capLines=withCaption ? wrapLines(state.caption, W, capFont, 3) : [];
       const lineH=18;
-      const captionH=14 + 24 + capLines.length*lineH + (state.pinMoved?lineH:0) + 24 + 12;
+      const captionH=withCaption ? 14 + 24 + capLines.length*lineH + (state.pinMoved?lineH:0) + 24 + 12 : 0;
       const H=imgH+captionH;
 
       const canvas=exportCanvas, ctx=canvas.getContext('2d');
@@ -935,33 +943,35 @@ body{
       }
 
       // caption bar
-      const cy=imgH+14;
-      ctx.textAlign='left';
-      ctx.fillStyle='#ef5d12'; ctx.fillRect(0,cy,46,3);
-      let y=cy+21;
-      ctx.fillStyle='#1a1c1e'; ctx.font='600 13px "IBM Plex Mono", monospace';
-      const coord='LAT '+state.lat.toFixed(6)+'°   LON '+state.lon.toFixed(6)+'°'+
-        (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'');
-      ctx.fillText(coord, 0, y);
-      ctx.fillStyle='#52555b'; ctx.font=capFont;
-      for(const line of capLines){ y+=lineH; ctx.fillText(line, 0, y); }
-      if(state.pinMoved){
-        y+=lineH;
-        ctx.fillStyle='#c54405'; ctx.font='600 11px "IBM Plex Mono", monospace';
-        ctx.fillText('⚠ PIN POSITION MANUALLY ADJUSTED', 0, y);
+      if(withCaption){
+        const cy=imgH+14;
+        ctx.textAlign='left';
+        ctx.fillStyle='#ef5d12'; ctx.fillRect(0,cy,46,3);
+        let y=cy+21;
+        ctx.fillStyle='#1a1c1e'; ctx.font='600 13px "IBM Plex Mono", monospace';
+        const coord='LAT '+state.lat.toFixed(6)+'°   LON '+state.lon.toFixed(6)+'°'+
+          (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'');
+        ctx.fillText(coord, 0, y);
+        ctx.fillStyle='#52555b'; ctx.font=capFont;
+        for(const line of capLines){ y+=lineH; ctx.fillText(line, 0, y); }
+        if(state.pinMoved){
+          y+=lineH;
+          ctx.fillStyle='#c54405'; ctx.font='600 11px "IBM Plex Mono", monospace';
+          ctx.fillText('⚠ PIN POSITION MANUALLY ADJUSTED', 0, y);
+        }
+        y+=22;
+        ctx.fillStyle='#8b8e94'; ctx.font='10px "IBM Plex Mono", monospace';
+        ctx.fillText('GEOTAG · FIELD INSPECTION MAPPER', 0, y);
       }
-      y+=22;
-      ctx.fillStyle='#8b8e94'; ctx.font='10px "IBM Plex Mono", monospace';
-      ctx.fillText('GEOTAG · FIELD INSPECTION MAPPER', 0, y);
 
       const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));
       cstat('GPS location found','ok');
       return blob;
     }
 
-    function filename(){
+    function filename(suffix){
       const c=state.lat!=null?(state.lat.toFixed(5)+'_'+state.lon.toFixed(5)):'photo';
-      return 'geotag_'+c.replace(/[^\w.-]/g,'')+'.png';
+      return 'geotag_'+c.replace(/[^\w.-]/g,'')+(suffix||'')+'.png';
     }
 
     function remove(){
@@ -979,8 +989,9 @@ body{
       ro.observe(photoImg);
     }
 
-    const inst={ buildBtn, buildExport, filename, restyleMap, syncMapHeight, remove };
-    buildBtn.addEventListener('click',()=>openExport(inst));
+    const inst={ buildBtn, buildPlainBtn, buildExport, filename, restyleMap, syncMapHeight, remove };
+    buildBtn.addEventListener('click',()=>openExport(inst,buildBtn,true));
+    buildPlainBtn.addEventListener('click',()=>openExport(inst,buildPlainBtn,false));
     removeBtn.addEventListener('click',remove);
     photos.push(inst);
     updateCount();
@@ -1029,13 +1040,13 @@ body{
 
     const label=exportDocxBtn.innerHTML;
     const batch=photos.slice();
-    const prevDisabled=batch.map(p=>p.buildBtn.disabled);
+    const prevDisabled=batch.map(p=>[p.buildBtn.disabled,p.buildPlainBtn.disabled]);
     exportDocxBtn.disabled=true;
     $('clearAllBtn').disabled=true;
-    batch.forEach(p=>p.buildBtn.disabled=true);
+    batch.forEach(p=>{ p.buildBtn.disabled=true; p.buildPlainBtn.disabled=true; });
 
     const IMG_W=600; // px @96dpi ≈ 6.25in — fits US Letter inside 1in margins + cell padding
-    const rows=[]; let skipped=0, failed=0;
+    const children=[]; let skipped=0, failed=0;
 
     try{
       for(let i=0;i<batch.length;i++){
@@ -1047,24 +1058,27 @@ body{
         // read dimensions now — the canvas is reused by the next iteration
         const w=exportCanvas.width, h=exportCanvas.height;
         const data=await blob.arrayBuffer();
-        rows.push(new docx.TableRow({children:[new docx.TableCell({
-          margins:{top:120,bottom:120,left:120,right:120},
-          children:[new docx.Paragraph({children:[new docx.ImageRun({
-            type:'png', data,
-            transformation:{width:IMG_W,height:Math.round(IMG_W*h/w)}
+        // one single-cell table per picture; the empty paragraph after it keeps
+        // adjacent tables from merging when Word opens the file
+        children.push(new docx.Table({
+          width:{size:100,type:docx.WidthType.PERCENTAGE},
+          rows:[new docx.TableRow({children:[new docx.TableCell({
+            margins:{top:120,bottom:120,left:120,right:120},
+            children:[new docx.Paragraph({children:[new docx.ImageRun({
+              type:'png', data,
+              transformation:{width:IMG_W,height:Math.round(IMG_W*h/w)}
+            })]})]
           })]})]
-        })]}));
+        }), new docx.Paragraph({}));
       }
 
-      if(!rows.length){
+      if(!children.length){
         ping(failed?'Export failed — no reports could be built':'No photos with GPS — nothing to export');
         return;
       }
 
       exportDocxBtn.innerHTML='Building document…';
-      const doc=new docx.Document({sections:[{children:[
-        new docx.Table({width:{size:100,type:docx.WidthType.PERCENTAGE},rows})
-      ]}]});
+      const doc=new docx.Document({sections:[{children}]});
       const out=await docx.Packer.toBlob(doc);
 
       const a=document.createElement('a');
@@ -1082,7 +1096,7 @@ body{
     }finally{
       exportDocxBtn.disabled=false; exportDocxBtn.innerHTML=label;
       $('clearAllBtn').disabled=false;
-      batch.forEach((p,i)=>p.buildBtn.disabled=prevDisabled[i]);
+      batch.forEach((p,i)=>{ p.buildBtn.disabled=prevDisabled[i][0]; p.buildPlainBtn.disabled=prevDisabled[i][1]; });
     }
   });
 
