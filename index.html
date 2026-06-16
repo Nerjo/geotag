@@ -398,6 +398,7 @@ body{
       </div>
       <span class="ws-count" id="wsCount"></span>
       <button class="btn accent" id="exportDocxBtn">⇣ Export all to Word</button>
+      <button class="btn" id="exportDocxPlainBtn">⇣ Word (no captions)</button>
       <button class="btn ghost" id="clearAllBtn">↺ Clear all</button>
     </div>
 
@@ -1132,15 +1133,15 @@ body{
      Reports are rendered sequentially because buildExport() draws onto the
      shared #exportCanvas; all build buttons are disabled meanwhile so a user
      can't race the canvas or mutate the photo list mid-batch. */
-  const exportDocxBtn=$('exportDocxBtn');
-  exportDocxBtn.addEventListener('click',async()=>{
+  const exportDocxBtn=$('exportDocxBtn'), exportDocxPlainBtn=$('exportDocxPlainBtn');
+  async function exportAllDocx(triggerBtn,withCaption){
     if(!photos.length) return;
     if(typeof docx==='undefined'){ ping('Word export unavailable — library not loaded'); return; }
 
-    const label=exportDocxBtn.innerHTML;
+    const label=triggerBtn.innerHTML;
     const batch=photos.slice();
     const prevDisabled=batch.map(p=>[p.buildBtn.disabled,p.buildPlainBtn.disabled]);
-    exportDocxBtn.disabled=true;
+    exportDocxBtn.disabled=true; exportDocxPlainBtn.disabled=true;
     $('clearAllBtn').disabled=true;
     batch.forEach(p=>{ p.buildBtn.disabled=true; p.buildPlainBtn.disabled=true; });
 
@@ -1149,9 +1150,9 @@ body{
 
     try{
       for(let i=0;i<batch.length;i++){
-        exportDocxBtn.innerHTML='Rendering '+(i+1)+'/'+batch.length+'…';
+        triggerBtn.innerHTML='Rendering '+(i+1)+'/'+batch.length+'…';
         let blob=null;
-        try{ blob=await batch[i].buildExport(); }
+        try{ blob=await batch[i].buildExport(withCaption); }
         catch(e){ console.error('word export: photo '+(i+1),e); failed++; continue; }
         if(!blob){ skipped++; continue; } // no GPS
         // read dimensions now — the canvas is reused by the next iteration
@@ -1176,13 +1177,13 @@ body{
         return;
       }
 
-      exportDocxBtn.innerHTML='Building document…';
+      triggerBtn.innerHTML='Building document…';
       const doc=new docx.Document({sections:[{children}]});
       const out=await docx.Packer.toBlob(doc);
 
       const a=document.createElement('a');
       a.href=URL.createObjectURL(out);
-      a.download='geotag_reports_'+new Date().toISOString().slice(0,10)+'.docx';
+      a.download='geotag_reports_'+new Date().toISOString().slice(0,10)+(withCaption?'':'_nocaption')+'.docx';
       a.click();
       setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 
@@ -1193,11 +1194,14 @@ body{
       console.error('word export',e);
       ping('Word export failed');
     }finally{
-      exportDocxBtn.disabled=false; exportDocxBtn.innerHTML=label;
+      exportDocxBtn.disabled=false; exportDocxPlainBtn.disabled=false;
+      triggerBtn.innerHTML=label;
       $('clearAllBtn').disabled=false;
       batch.forEach((p,i)=>{ p.buildBtn.disabled=prevDisabled[i][0]; p.buildPlainBtn.disabled=prevDisabled[i][1]; });
     }
-  });
+  }
+  exportDocxBtn.addEventListener('click',()=>exportAllDocx(exportDocxBtn,true));
+  exportDocxPlainBtn.addEventListener('click',()=>exportAllDocx(exportDocxPlainBtn,false));
 
   // map style applies to every photo at once
   document.querySelectorAll('input[name="mapType"]').forEach(r=>{
