@@ -2,7 +2,12 @@
 
 A standalone, installable app (PWA) that reads a geotagged photo's GPS data
 **entirely on your device**, plots the location on a map, looks up the address,
-and exports a side-by-side **photo + map report image** for inspection reports.
+and exports a side-by-side **photo + map** image. A photo of a plant issue or
+piece of equipment already holds the exact spot it was taken — GeoTag turns that
+into a precise, shareable record so the next person (maintenance, NDE, operations,
+or a follow-up inspection) can navigate **straight back to it**, instead of relying
+on a worded description or "northeast corner of Plant 12." Great for inspection
+reports, and for any field hand-off where someone must later find the location.
 Drop in one photo or a whole batch — each gets its own map, readout, and report.
 
 - 📍 Drop **one or many** geotagged photos (JPG / PNG / HEIC). Each gets its own

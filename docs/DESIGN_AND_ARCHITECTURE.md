@@ -54,15 +54,18 @@
 
 ## 1. Executive overview
 
-GeoTag is a lightweight, installable web application that lets field staff turn a
-geotagged photograph into a documented, map-referenced **inspection report image**
-— without uploading the photograph anywhere.
+GeoTag is a lightweight, installable web application that lets field personnel turn
+a geotagged photograph into a **precise, shareable record of *where* something is**
+— so the next person who has to go there can find the exact spot — without
+uploading the photograph anywhere.
 
 A user drops one or more photos onto the page. For each photo the app reads the
 embedded GPS metadata **in the browser**, plots the location on an interactive
 map, looks up a human-readable address, and produces a side-by-side
-**photo + map** image with a coordinate caption that can be copied, downloaded, or
-shared straight into an inspection report.
+**photo + map** image with a coordinate caption. That artefact can be copied,
+downloaded, or shared into a report, a work order, or a message so the recipient
+can navigate straight to the location — and it works just as well for an
+inspection report as for any other field hand-off.
 
 The defining architectural characteristic is **privacy by design**: photographs
 and their coordinates are processed entirely on the user's device. The only
@@ -83,22 +86,38 @@ pair-programmer.
 
 ### 2.1 The problem it solves
 
-Field inspectors routinely take geotagged photos and then need to evidence
-*where* each photo was taken inside a written report. The manual process is slow
-and error-prone: copy coordinates out of a phone, paste them into a separate
-mapping tool, screenshot the map, crop it, and paste photo and map side by side.
-That is repetitive, inconsistent between staff, and — because it often runs
-through third-party apps or uploads — it can put potentially sensitive site
-imagery onto servers outside the organisation's control.
+Field personnel routinely photograph a piece of equipment, a defect, or a
+developing issue out in the plant. Almost every one of those photos already carries
+the **exact GPS location** of where it was taken — but that location data normally
+stays locked inside the image file and is never put to use.
 
-GeoTag collapses that workflow into a single drag-and-drop step, produces a
-consistent branded artefact, and keeps the source imagery on the device.
+So the equipment's physical location ends up being communicated to the next person
+in *words*: a written description, nearby landmarks, or a rough bearing such as
+"northeast corner of Plant 12." Whoever later has to **return to that exact spot**
+— a maintenance technician sent to fix the leak, an NDE technician performing a
+follow-up inspection, or operations personnel asked to monitor the equipment across
+shifts — then has to interpret that description and hunt for the location. That is
+slow, ambiguous, inconsistent between staff, and easy to get wrong.
+
+GeoTag closes this gap. It reads the photograph's own GPS data **on the device**
+and turns it into a precise, shareable location: an interactive map, exact
+coordinates, and a side-by-side photo + map artefact that points the next person
+straight to where the photo was taken — with one-tap links to open the spot in a
+phone's map app for turn-by-turn navigation.
+
+Although it grew out of inspection work, the tool is **not limited to inspection
+reports**. It serves any field workflow where one person needs to show another
+exactly where something is and that second person will eventually have to go find
+it — fixing it, re-inspecting it, monitoring it, or simply confirming a concern.
+And because the image is processed entirely on the device, it keeps potentially
+sensitive site imagery off external servers.
 
 ### 2.2 The stakeholder problem
 
 | Stakeholder | The problem they have today | How GeoTag addresses it |
 |---|---|---|
-| **Operations / inspection teams** | Inconsistent, time-consuming photo-to-report evidencing across staff. | One standard, fast, repeatable output. |
+| **Field personnel capturing the issue** (inspectors & others) | Can only convey a photographed item's location in words, landmarks, or a rough bearing — imprecise, slow, and inconsistent between staff. | Captures the photo's actual coordinates plus a map the recipient can navigate to. |
+| **Personnel who must return to the location** (maintenance, NDE, operations) | Must interpret a vague written description and then search the plant to find the exact equipment again. | Receive exact coordinates + map + photo, and can open the spot directly in a map app. |
 | **IT & Security** | Field tools that upload imagery to external/consumer cloud services create data-governance and breach exposure. | No upload, no backend, no accounts — minimal attack surface to assess. |
 | **Digital Services / delivery** | Building and operating a bespoke app is costly (servers, auth, patching). | A static, serverless app with near-zero operational footprint. |
 | **Records / compliance** | Location claims in reports are hard to verify and easy to mis-transcribe. | Coordinates are read from the photo and rendered into the artefact verbatim, with an explicit flag if the pin was manually adjusted. |
@@ -108,7 +127,8 @@ consistent branded artefact, and keeps the source imagery on the device.
 1. **Privacy first** — image data must never leave the device.
 2. **Zero install friction** — works from a URL; installable without an app store.
 3. **Works in the field** — fully functional offline after first load.
-4. **Report-ready output** — a clean, branded, copy/paste-able image.
+4. **Actionable, shareable output** — a clean photo + map + coordinates the next
+   person can navigate to (drops straight into a report, work order, or message).
 5. **No operational backend** — nothing to host, patch, or breach server-side.
 
 ---
@@ -120,8 +140,9 @@ needs to *accomplish* with the app.
 
 | User group | Who they are | What they need to accomplish | Primary surface |
 |---|---|---|---|
-| **Field inspector** | On-site staff capturing photos, often on a phone, sometimes offline. | Drop a just-taken photo, confirm the location is right (and nudge it if not), and produce a report image. | Mobile PWA, single-column. |
-| **Report assembler / back-office** | Office staff compiling inspection or compliance reports, usually on desktop. | Batch-process several photos, copy/download each report image into a document. | Desktop, two-column, multi-photo. |
+| **Field personnel** (inspectors & others) | On-site staff capturing a photo of an issue or piece of equipment, often on a phone, sometimes offline. | Drop a just-taken photo, confirm the location is right (and nudge it if not), and produce a precise location record to hand off. | Mobile PWA, single-column. |
+| **Returning personnel** (maintenance / NDE / operations) | Whoever must physically go back to the photographed location later — to fix, re-inspect, or monitor it. | Find the exact spot from the shared coordinates and map, and open it in a map app for navigation. | Receives the report image / coordinates; uses the "Open in maps" links. |
+| **Report assembler / back-office** | Office staff packaging the location records into reports or work orders, usually on desktop. | Batch-process several photos, copy/download each report image into a document. | Desktop, two-column, multi-photo. |
 | **IT / security reviewer** | Assesses the tool before rollout. | Understand data handling, egress, hosting, and risk. | This document. |
 | **Application owner / maintainer** | Owns the product and future changes. | Extend features, update dependencies, redeploy. | Source repo + this document. |
 
@@ -144,6 +165,9 @@ The interface is optimised around three actions, in priority order:
 
 ### 4.2 Primary journeys
 
+Every journey ends in an artefact whose job is to get the **next person to the
+exact location** — so the journeys span both creating the record and acting on it.
+
 **Journey A — Single photo (mobile, in the field).**
 Open app → drop one photo → app reads GPS and shows the map and readout → (optional)
 drag pin / set heading / edit caption → tap **Build report image** → **Copy** or
@@ -163,6 +187,12 @@ the correction is transparent in the evidence.
 Drop a photo with no GPS → app shows the available metadata (camera, capture time)
 and a clear notice, hides the map, and disables the report button — no dead-ends.
 
+**Journey E — Returning to the location (the recipient).**
+A maintenance, NDE, or operations colleague receives the report image (or just the
+coordinates) → opens the **"Open in Google / Apple / OpenStreetMap"** link, or reads
+the coordinates → navigates straight to the exact spot where the photo was taken,
+instead of decoding a worded description. This is the payoff the other journeys feed.
+
 ```mermaid
 flowchart LR
     A["Open app"] --> B["Add photo(s)<br/>drop / browse"]
@@ -172,8 +202,9 @@ flowchart LR
     E --> F["Optional: drag pin /<br/>set heading / edit caption"]
     F --> G["Build report image"]
     G --> H["Copy / Download / Share"]
+    H --> I["Next person opens the link →<br/>navigates to the exact spot"]
     classDef accent fill:#fdeee4,stroke:#c54405;
-    class G,H accent;
+    class G,H,I accent;
 ```
 
 ---
@@ -446,9 +477,10 @@ number of third-party tile/geocoding services called directly from the browser.
 
 ```mermaid
 flowchart TB
-    INSP["Field inspector<br/>(captures &amp; corrects)"]
+    INSP["Field personnel<br/>(capture &amp; locate the issue)"]
     ASMB["Report assembler<br/>(batches &amp; exports)"]
-    GEO["GeoTag PWA<br/>Reads GPS on-device, maps it,<br/>exports a report image"]
+    GEO["GeoTag PWA<br/>Reads GPS on-device, maps it,<br/>exports a precise location record"]
+    RET["Returning personnel<br/>maintenance / NDE / operations<br/>(navigate back to the spot)"]
     HOST["Static HTTPS host<br/>(serves the app files)"]
     TILES["Map tile providers<br/>OSM · Esri · OpenTopoMap"]
     NOM["OSM Nominatim<br/>(reverse geocode)"]
@@ -458,13 +490,14 @@ flowchart TB
     HOST -. serves app .-> GEO
     GEO -. tile coords .-> TILES
     GEO -. lat/lon only .-> NOM
+    GEO -. report image + coordinates .-> RET
 
     classDef sys fill:#fbf9f4,stroke:#1a1c1e,stroke-width:2px;
     classDef ext fill:#fdeee4,stroke:#c54405;
     classDef person fill:#e2efed,stroke:#15706b;
     class GEO sys;
     class TILES,NOM,HOST ext;
-    class INSP,ASMB person;
+    class INSP,ASMB,RET person;
 ```
 
 ### 11.2 Containers (C4 — level 2)
