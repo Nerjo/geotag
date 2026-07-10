@@ -380,6 +380,15 @@ body{
 .ed-dial-wrap[hidden]{display:none}
 .ed-dial-val{font-family:'IBM Plex Mono',monospace;font-size:.8rem;color:var(--accent);min-height:18px}
 #edDial{width:min(340px,86vw);height:40px;display:block;touch-action:none;cursor:ew-resize}
+.ed-adj-row{display:flex;gap:16px;justify-content:center;align-items:center;margin:2px 0 4px}
+.ed-adj{
+  width:40px;height:40px;border-radius:50%;background:rgba(30,30,34,.85);
+  border:1.5px solid #55555c;color:#fff;display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;padding:0;transition:.15s;
+}
+.ed-adj.active{border-color:#fff;background:#3a3a3f}
+.ed-adj.valued{border-color:var(--accent)}
+.ed-adj svg{display:block}
 .ed-tools{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;min-height:62px}
 .ed-tools[hidden]{display:none}
 .ed-tool{
@@ -472,7 +481,7 @@ body{
       <span>Photos are read in your browser. Nothing is uploaded — coordinates never leave this device (map tiles &amp; optional address lookup excepted).</span>
       <!-- keep in sync with CACHE_VERSION in sw.js — this is how you tell a
            stale cached build from the current deploy at a glance -->
-      <span class="buildtag" style="margin-left:auto;white-space:nowrap;color:var(--ink-faint)">BUILD V9</span>
+      <span class="buildtag" style="margin-left:auto;white-space:nowrap;color:var(--ink-faint)">BUILD V10</span>
     </div>
   </header>
 
@@ -543,8 +552,30 @@ body{
   </div>
   <div class="ed-stage" id="edStage"><canvas id="editorCanvas"></canvas></div>
   <div class="ed-dial-wrap" id="edDialWrap">
-    <div class="ed-dial-val" id="edDialVal">0°</div>
-    <canvas id="edDial" aria-label="Straighten dial — drag sideways to rotate"></canvas>
+    <div class="ed-dial-val" id="edDialVal">STRAIGHTEN 0°</div>
+    <div class="ed-adj-row" id="edAdjRow" role="radiogroup" aria-label="Adjustment">
+      <button class="ed-adj active" data-adj="straighten" title="Straighten" aria-label="Straighten">
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r="6.4" fill="currentColor"/>
+          <rect x="3.4" y="9.3" width="13.2" height="1.4" fill="#0b0b0d"/>
+          <rect x="0" y="9.3" width="3.2" height="1.4" fill="currentColor"/>
+          <rect x="16.8" y="9.3" width="3.2" height="1.4" fill="currentColor"/>
+        </svg>
+      </button>
+      <button class="ed-adj" data-adj="vertical" title="Vertical perspective" aria-label="Vertical perspective">
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <path d="M7 4 L13 4 L15.5 16 L4.5 16 Z" fill="currentColor"/>
+          <rect x="9.35" y="2.5" width="1.3" height="15" fill="#0b0b0d"/>
+        </svg>
+      </button>
+      <button class="ed-adj" data-adj="horizontal" title="Horizontal perspective" aria-label="Horizontal perspective">
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <path d="M16 4.5 L16 15.5 L4 13 L4 7 Z" fill="currentColor"/>
+          <rect x="2.5" y="9.35" width="15" height="1.3" fill="#0b0b0d"/>
+        </svg>
+      </button>
+    </div>
+    <canvas id="edDial" aria-label="Adjustment dial — drag sideways"></canvas>
   </div>
   <div class="ed-tools" id="edTools" hidden>
     <button class="ed-tool edtool active" data-tool="pen" title="Freehand pen">✎ Pen</button>
@@ -837,6 +868,7 @@ body{
     let mode='crop', tool='pen', color=COLORS[0], widthKey='m';
     // crop-session state
     let thetaDeg=0, crop=null, cropBase=null, sesRot=false, sesFlip=false;
+    let vDeg=0, hDeg=0, adjKey='straighten';  // perspective tilts + active dial control
     let ratio=0, sesOrigRatio=1;              // 0 = freeform
     let view={s:1,ax:0,ay:0}, dpr=1;          // screen = A + r·s  (r in rotated space)
     let drag=null, shape=null, dialDrag=null, anim=null;
@@ -865,7 +897,35 @@ body{
       const cos=Math.cos(ang),sin=Math.sin(ang),dx=p.x-c.x,dy=p.y-c.y;
       return {x:c.x+dx*cos-dy*sin, y:c.y+dx*sin+dy*cos};
     }
-    const toImagePt=r=>rotP(r,imgC(),-theta());
+    // Perspective model: the photo plane tilted about its horizontal axis
+    // (vertical correction, vDeg) then its vertical axis (horizontal, hDeg),
+    // seen by a camera at distance d — i.e. an exact keystone homography.
+    // View space = that projection rotated by the straighten angle. All the
+    // crop/clamp machinery only needs the forward map and its inverse.
+    function perspCoef(){
+      const f=vDeg*DEG, p=hDeg*DEG;
+      const sinF=Math.sin(f), cosF=Math.cos(f), sinP=Math.sin(p), cosP=Math.cos(p);
+      return {a1:cosP, b1:sinF*sinP, b2:cosF, a3:-sinP, b3:sinF*cosP,
+              d:1.2*Math.max(work.width,work.height)};
+    }
+    function imgToView3(pt){ // image px → view px + homogeneous denominator
+      const c=imgC(), k=perspCoef();
+      const x=pt.x-c.x, y=pt.y-c.y;
+      const x2=k.a1*x+k.b1*y, y2=k.b2*y, z2=k.a3*x+k.b3*y;
+      const wc=(k.d-z2)/k.d;                       // >0 for our tilt range
+      const r=rotP({x:x2/wc,y:y2/wc},{x:0,y:0},theta());
+      return {x:r.x+c.x, y:r.y+c.y, w:wc};
+    }
+    const imgToView=pt=>{ const r=imgToView3(pt); return {x:r.x,y:r.y}; };
+    function toImagePt(v){ // view px → image px (exact inverse; linear solve)
+      const c=imgC(), k=perspCoef();
+      const u=rotP({x:v.x-c.x,y:v.y-c.y},{x:0,y:0},-theta());
+      const A=k.d*k.a1+u.x*k.a3, B=k.d*k.b1+u.x*k.b3;
+      const C=u.y*k.a3,          E=k.d*k.b2+u.y*k.b3;
+      const det=A*E-B*C;
+      if(Math.abs(det)<1e-9) return {x:1e9,y:1e9};
+      return {x:k.d*(u.x*E-B*u.y)/det+c.x, y:k.d*(A*u.y-u.x*C)/det+c.y};
+    }
     const fullCrop=()=>({x:0,y:0,w:work.width,h:work.height});
     function validRect(r){
       const W=work.width,H=work.height;
@@ -900,7 +960,7 @@ body{
       return Math.abs(crop.x-f.x)>0.5||Math.abs(crop.y-f.y)>0.5||
              Math.abs(crop.w-f.w)>0.5||Math.abs(crop.h-f.h)>0.5;
     }
-    const sessionChanged=()=>thetaDeg!==0||sesRot||sesFlip||cropChanged();
+    const sessionChanged=()=>thetaDeg!==0||vDeg!==0||hDeg!==0||sesRot||sesFlip||cropChanged();
     function isDirty(){ return undoStack.length>0||dirtyFloor||sessionChanged(); }
 
     /* ----- view (screen = A + r·s) ----- */
@@ -940,11 +1000,15 @@ body{
       dctx.setTransform(1,0,0,1,0,0);
       dctx.clearRect(0,0,canvas.width,canvas.height);
       dctx.setTransform(dpr*view.s,0,0,dpr*view.s,dpr*view.ax,dpr*view.ay);
-      const c=imgC();
-      dctx.save();
-      dctx.translate(c.x,c.y); dctx.rotate(theta()); dctx.translate(-c.x,-c.y);
-      dctx.drawImage(work,0,0);
-      dctx.restore();
+      if(mode==='crop'&&gl){
+        renderGL();          // image on the GL canvas beneath; 2D draws the UI
+      }else{
+        const c=imgC();
+        dctx.save();
+        dctx.translate(c.x,c.y); dctx.rotate(theta()); dctx.translate(-c.x,-c.y);
+        dctx.drawImage(work,0,0);
+        dctx.restore();
+      }
       if(mode==='crop') drawCropUI(s);
       else if(shape){
         // preview clipped to the photo, matching what baking will keep
@@ -990,16 +1054,31 @@ body{
     }
 
     /* ----- straighten dial ----- */
+    // Straighten, Vertical and Horizontal share one dial, like iOS Photos.
+    const ADJ={
+      straighten:{label:'STRAIGHTEN',max:45,unit:'°',get:()=>thetaDeg,set:v=>{thetaDeg=v;}},
+      vertical:  {label:'VERTICAL',  max:20,unit:'', get:()=>vDeg,    set:v=>{vDeg=v;}},
+      horizontal:{label:'HORIZONTAL',max:20,unit:'', get:()=>hDeg,    set:v=>{hDeg=v;}}
+    };
+    function syncAdjBtns(){
+      overlayE.querySelectorAll('.ed-adj').forEach(b=>{
+        const k=b.dataset.adj;
+        b.classList.toggle('active',k===adjKey);
+        b.classList.toggle('valued',Math.abs(ADJ[k].get())>0.01);
+        b.setAttribute('aria-checked',String(k===adjKey));
+      });
+    }
     function drawDial(){
       const w=dial.clientWidth||300, h=40;
       dial.width=Math.round(w*dpr); dial.height=Math.round(h*dpr);
+      const a=ADJ[adjKey], val=a.get(), max=a.max;
       const x=dialCtx;
       x.setTransform(dpr,0,0,dpr,0,0);
       x.clearRect(0,0,w,h);
       const cx=w/2;
-      for(let v=Math.ceil(thetaDeg-cx/PPD); v<=Math.floor(thetaDeg+cx/PPD); v++){
-        if(v<-45||v>45) continue;
-        const px=cx+(v-thetaDeg)*PPD, major=v%5===0;
+      for(let v=Math.ceil(val-cx/PPD); v<=Math.floor(val+cx/PPD); v++){
+        if(v<-max||v>max) continue;
+        const px=cx+(v-val)*PPD, major=v%5===0;
         x.strokeStyle=major?'rgba(255,255,255,.75)':'rgba(255,255,255,.28)';
         x.beginPath(); x.moveTo(px,h-6-(major?13:8)); x.lineTo(px,h-6); x.stroke();
         if(v%15===0){
@@ -1011,30 +1090,31 @@ body{
       x.fillStyle='#ef5d12';
       x.fillRect(cx-1,h-27,2,22);
       x.beginPath(); x.moveTo(cx-4,h-31); x.lineTo(cx+4,h-31); x.lineTo(cx,h-25); x.closePath(); x.fill();
-      dialVal.textContent=thetaDeg?((thetaDeg>0?'+':'')+(Math.round(thetaDeg*10)/10)+'°'):'0°';
-      dialVal.style.opacity=thetaDeg?1:.55;
+      const vTxt=val?((val>0?'+':'')+(Math.round(val*10)/10)+a.unit):('0'+a.unit);
+      dialVal.textContent=a.label+'\u2002'+vTxt;
+      dialVal.style.opacity=val?1:.55;
     }
-    function setThetaFromBase(t,base){
-      thetaDeg=t;
-      const cNew=rotP(base.q,imgC(),theta());
-      let cand={x:cNew.x-base.w/2,y:cNew.y-base.h/2,w:base.w,h:base.h};
-      cand=shrinkValid(cand);          // auto-zoom to keep the frame covered
-      crop=cand; view=targetView();
-      drawDial(); render(); syncSessionUI();
+    function setAdjFromBase(val,base){
+      ADJ[adjKey].set(val);
+      const cNew=imgToView(base.q);
+      crop=shrinkValid({x:cNew.x-base.w/2,y:cNew.y-base.h/2,w:base.w,h:base.h});
+      view=targetView();
+      drawDial(); render(); syncSessionUI(); syncAdjBtns();
     }
     dial.addEventListener('pointerdown',e=>{
       if(!work||busy||mode!=='crop') return;
       e.preventDefault(); stopAnim();
       try{ dial.setPointerCapture(e.pointerId); }catch(_){}
-      dialDrag={x0:e.clientX, t0:thetaDeg,
+      dialDrag={x0:e.clientX, v0:ADJ[adjKey].get(),
                 q:toImagePt({x:crop.x+crop.w/2,y:crop.y+crop.h/2}), w:crop.w, h:crop.h};
     });
     dial.addEventListener('pointermove',e=>{
       if(!dialDrag||!work) return;
-      let t=dialDrag.t0-(e.clientX-dialDrag.x0)/PPD;
-      t=Math.max(-45,Math.min(45,Math.round(t*10)/10));
+      const max=ADJ[adjKey].max;
+      let t=dialDrag.v0-(e.clientX-dialDrag.x0)/PPD;
+      t=Math.max(-max,Math.min(max,Math.round(t*10)/10));
       if(Math.abs(t)<0.35) t=0;        // gentle snap at zero, like iOS
-      setThetaFromBase(t,dialDrag);
+      setAdjFromBase(t,dialDrag);
     });
     const endDial=()=>{ if(dialDrag){ dialDrag=null; drawDial(); render(); } };
     dial.addEventListener('pointerup',endDial);
@@ -1044,23 +1124,28 @@ body{
     function beginCropSession(){
       cropBase=work;
       sesOrigRatio=work.width/work.height;
-      thetaDeg=0; crop=fullCrop(); sesRot=false; sesFlip=false;
+      thetaDeg=0; vDeg=0; hDeg=0; adjKey='straighten';
+      crop=fullCrop(); sesRot=false; sesFlip=false;
       setRatioChip('free'); ratio=0;
-      drawDial(); syncSessionUI();
+      drawDial(); syncSessionUI(); syncAdjBtns();
     }
     function commitCropSession(){
       if(!work||!cropBase) return;
       if(!sessionChanged()){ cropBase=null; return; }
       pushUndoOf(cropBase);            // the whole session is one undo step
-      const out=document.createElement('canvas');
-      out.width=Math.max(1,Math.round(crop.w));
-      out.height=Math.max(1,Math.round(crop.h));
-      const x=out.getContext('2d'), c=imgC();
-      x.translate(-crop.x,-crop.y);
-      x.translate(c.x,c.y); x.rotate(theta()); x.translate(-c.x,-c.y);
-      x.drawImage(work,0,0);
-      setWorkBitmap(out);
-      thetaDeg=0; crop=fullCrop(); sesRot=false; sesFlip=false; cropBase=null;
+      if((vDeg||hDeg)&&gl){
+        setWorkBitmap(bakePerspective());
+      }else{
+        const out=document.createElement('canvas');
+        out.width=Math.max(1,Math.round(crop.w));
+        out.height=Math.max(1,Math.round(crop.h));
+        const x=out.getContext('2d'), c=imgC();
+        x.translate(-crop.x,-crop.y);
+        x.translate(c.x,c.y); x.rotate(theta()); x.translate(-c.x,-c.y);
+        x.drawImage(work,0,0);
+        setWorkBitmap(out);
+      }
+      thetaDeg=0; vDeg=0; hDeg=0; crop=fullCrop(); sesRot=false; sesFlip=false; cropBase=null;
     }
     function resetSession(){
       if(busy||!work||!cropBase) return;
@@ -1079,10 +1164,12 @@ body{
       x.translate(0,nc.height); x.rotate(-Math.PI/2); x.drawImage(work,0,0);
       setWorkBitmap(nc);
       const q2={x:q.y,y:W-q.x};                       // the same point after 90° CCW
-      const c2=rotP(q2,imgC(),theta());
+      const pv=vDeg;                                  // tilt axes rotate with the content
+      vDeg=hDeg; hDeg=-pv;
+      const c2=imgToView(q2);
       crop=shrinkValid({x:c2.x-crop.h/2,y:c2.y-crop.w/2,w:crop.h,h:crop.w});
       sesRot=true;
-      view=targetView(); render(); syncSessionUI();
+      view=targetView(); render(); syncSessionUI(); syncAdjBtns(); drawDial();
     }
     function flipH(){
       if(busy||!work||mode!=='crop') return;
@@ -1094,11 +1181,11 @@ body{
       const x=nc.getContext('2d');
       x.translate(W,0); x.scale(-1,1); x.drawImage(work,0,0);
       setWorkBitmap(nc);
-      thetaDeg=-thetaDeg;                             // mirroring flips the tilt
-      const c2=rotP({x:W-q.x,y:q.y},imgC(),theta());
+      thetaDeg=-thetaDeg; hDeg=-hDeg;                 // mirroring flips tilt + horizontal keystone
+      const c2=imgToView({x:W-q.x,y:q.y});
       crop=shrinkValid({x:c2.x-crop.w/2,y:c2.y-crop.h/2,w:crop.w,h:crop.h});
       sesFlip=!sesFlip;
-      view=targetView(); drawDial(); render(); syncSessionUI();
+      view=targetView(); drawDial(); render(); syncSessionUI(); syncAdjBtns();
     }
     function setRatioChip(key){
       aspectsRow.querySelectorAll('.ed-chip').forEach(ch=>{
@@ -1121,6 +1208,87 @@ body{
       animateView(160); syncSessionUI();
     }
     function syncSessionUI(){ resetBtn.hidden=!(mode==='crop'&&sessionChanged()); }
+
+    /* ----- WebGL image renderer (exact keystone preview + bake) -----
+       A 2D canvas can't draw a projective transform; a single GL quad with
+       per-vertex homogeneous w renders the homography exactly. The GL canvas
+       sits beneath the 2D canvas, which keeps drawing the crop UI. */
+    const glCanvas=document.createElement('canvas');
+    glCanvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none';
+    stage.insertBefore(glCanvas,canvas);
+    let gl=null, glProg=null, glPosBuf=null, glUVBuf=null, glTex=null, glTexSrc=null;
+    (function glInit(){
+      try{ gl=glCanvas.getContext('webgl',{alpha:true,premultipliedAlpha:true,preserveDrawingBuffer:true}); }
+      catch(_){ gl=null; }
+      if(!gl) return;
+      try{
+        const sh=(t,code)=>{
+          const s=gl.createShader(t);
+          gl.shaderSource(s,code); gl.compileShader(s);
+          if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)||'shader');
+          return s;
+        };
+        glProg=gl.createProgram();
+        gl.attachShader(glProg,sh(gl.VERTEX_SHADER,
+          'attribute vec4 aPos;attribute vec2 aUV;varying vec2 vUV;void main(){gl_Position=aPos;vUV=aUV;}'));
+        gl.attachShader(glProg,sh(gl.FRAGMENT_SHADER,
+          'precision mediump float;varying vec2 vUV;uniform sampler2D uTex;void main(){gl_FragColor=texture2D(uTex,vUV);}'));
+        gl.linkProgram(glProg);
+        if(!gl.getProgramParameter(glProg,gl.LINK_STATUS)) throw new Error('link');
+        glPosBuf=gl.createBuffer(); glUVBuf=gl.createBuffer();
+        glTex=gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D,glTex);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      }catch(e){ console.warn('editor: WebGL unavailable, perspective disabled',e); gl=null; }
+    })();
+    function glDraw(mapView,outW,outH){
+      if(glTexSrc!==work){
+        gl.bindTexture(gl.TEXTURE_2D,glTex);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,work);
+        glTexSrc=work;
+      }
+      const corners=[{x:0,y:0},{x:work.width,y:0},{x:work.width,y:work.height},{x:0,y:work.height}];
+      const uv=[[0,0],[1,0],[1,1],[0,1]];
+      const P=corners.map(p=>{
+        const v=imgToView3(p), m=mapView(v);
+        return [(m.x/outW)*2-1, 1-(m.y/outH)*2, v.w];
+      });
+      const pos=[],uvs=[];
+      for(const i of [0,1,2,0,2,3]){
+        pos.push(P[i][0]*P[i][2], P[i][1]*P[i][2], 0, P[i][2]);
+        uvs.push(uv[i][0],uv[i][1]);
+      }
+      gl.viewport(0,0,outW,outH);
+      gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(glProg);
+      const aPos=gl.getAttribLocation(glProg,'aPos'), aUV=gl.getAttribLocation(glProg,'aUV');
+      gl.bindBuffer(gl.ARRAY_BUFFER,glPosBuf);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(pos),gl.STREAM_DRAW);
+      gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,4,gl.FLOAT,false,0,0);
+      gl.bindBuffer(gl.ARRAY_BUFFER,glUVBuf);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(uvs),gl.STREAM_DRAW);
+      gl.enableVertexAttribArray(aUV); gl.vertexAttribPointer(aUV,2,gl.FLOAT,false,0,0);
+      gl.drawArrays(gl.TRIANGLES,0,6);
+    }
+    function renderGL(){
+      if(glCanvas.width!==canvas.width||glCanvas.height!==canvas.height){
+        glCanvas.width=canvas.width; glCanvas.height=canvas.height;
+      }
+      glDraw(v=>({x:(view.ax+v.x*view.s)*dpr, y:(view.ay+v.y*view.s)*dpr}),
+        glCanvas.width, glCanvas.height);
+    }
+    function bakePerspective(){
+      const outW=Math.max(1,Math.round(crop.w)), outH=Math.max(1,Math.round(crop.h));
+      glCanvas.width=outW; glCanvas.height=outH;
+      glDraw(v=>({x:v.x-crop.x, y:v.y-crop.y}), outW, outH);
+      const out=document.createElement('canvas');
+      out.width=outW; out.height=outH;
+      out.getContext('2d').drawImage(glCanvas,0,0);
+      return out;
+    }
 
     /* ----- pan / zoom (frame stays put, image moves) ----- */
     function panBy(d){
@@ -1384,6 +1552,7 @@ body{
       topCrop.hidden=!cropM; topMarkup.hidden=cropM;
       aspectsRow.hidden=!cropM; dialWrap.hidden=!cropM;
       toolsRow.hidden=cropM;
+      glCanvas.style.display=(cropM&&gl)?'':'none';
       canvas.style.cursor=cropM?'default':'crosshair';
       syncSessionUI();
     }
@@ -1402,6 +1571,19 @@ body{
     $('edFlip').addEventListener('click',flipH);
     resetBtn.addEventListener('click',resetSession);
     undoBtn.addEventListener('click',doUndo);
+    overlayE.querySelectorAll('.ed-adj').forEach(b=>{
+      b.setAttribute('role','radio');
+      b.addEventListener('click',()=>{
+        if(busy||mode!=='crop') return;
+        adjKey=b.dataset.adj;
+        syncAdjBtns(); drawDial();
+      });
+    });
+    if(!gl){ // no WebGL: keystone can't render — offer straighten only
+      overlayE.querySelectorAll('.ed-adj').forEach(b=>{
+        if(b.dataset.adj!=='straighten') b.style.display='none';
+      });
+    }
     aspectsRow.querySelectorAll('.ed-chip').forEach(ch=>{
       ch.setAttribute('role','radio');
       ch.setAttribute('aria-checked',String(ch.classList.contains('active')));
@@ -1479,7 +1661,7 @@ body{
       stopAnim();
       inst=null; work=null; wctx=null; cropBase=null; undoStack=[];
       drag=null; shape=null; dialDrag=null; pointers.clear();
-      dirtyFloor=false; restoredPristine=false; thetaDeg=0; crop=null;
+      dirtyFloor=false; restoredPristine=false; thetaDeg=0; vDeg=0; hDeg=0; crop=null;
       if(lastFocus && document.contains(lastFocus)){ try{ lastFocus.focus(); }catch(_){} }
       lastFocus=null;
     }
@@ -1522,8 +1704,8 @@ body{
 
     // minimal state hook for automated tests
     window.__geotagEditor={ state:()=>work?{
-      mode,thetaDeg,crop:{...crop},workW:work.width,workH:work.height,
-      view:{...view},dirty:isDirty()}:null };
+      mode,thetaDeg,vDeg,hDeg,adjKey,crop:{...crop},workW:work.width,workH:work.height,
+      view:{...view},gl:!!gl,dirty:isDirty()}:null };
 
     return {open,cancel:requestClose,refit,isOpen};
   })();
