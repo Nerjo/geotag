@@ -402,6 +402,19 @@ body{
   box-shadow:0 0 0 1.5px #55555c;cursor:pointer;padding:0;
 }
 .ed-dot.active{box-shadow:0 0 0 2.5px #fff}
+.ed-textwrap{position:absolute;z-index:5}
+.ed-textbox{
+  min-width:24px;max-width:min(70vw,520px);outline:none;white-space:pre-wrap;
+  border:1.5px dashed rgba(255,255,255,.75);border-radius:4px;
+  padding:1px 3px;background:rgba(10,10,12,.25);
+  font-family:'IBM Plex Sans',system-ui,sans-serif;font-weight:600;line-height:1.25;
+  user-select:text;-webkit-user-select:text;cursor:text;
+}
+.ed-textgrip{
+  position:absolute;top:-26px;left:0;cursor:grab;user-select:none;touch-action:none;
+  background:#26262b;color:#cfcfd4;border-radius:6px;padding:2px 10px;
+  font-size:12px;line-height:1.5;white-space:nowrap;
+}
 .ed-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:54px}
 .ed-modes{display:flex;gap:6px;justify-content:center}
 .ed-mode{
@@ -481,7 +494,7 @@ body{
       <span>Photos are read in your browser. Nothing is uploaded — coordinates never leave this device (map tiles &amp; optional address lookup excepted).</span>
       <!-- keep in sync with CACHE_VERSION in sw.js — this is how you tell a
            stale cached build from the current deploy at a glance -->
-      <span class="buildtag" style="margin-left:auto;white-space:nowrap;color:var(--ink-faint)">BUILD V10</span>
+      <span class="buildtag" style="margin-left:auto;white-space:nowrap;color:var(--ink-faint)">BUILD V11</span>
     </div>
   </header>
 
@@ -584,6 +597,7 @@ body{
     <button class="ed-tool edtool" data-tool="box" title="Rectangle">▭ Box</button>
     <button class="ed-tool edtool" data-tool="ellipse" title="Ellipse">◯ Ellipse</button>
     <button class="ed-tool edtool" data-tool="cloud" title="Revision cloud">☁ Cloud</button>
+    <button class="ed-tool edtool" data-tool="text" title="Text box — tap the photo to place">T Text</button>
     <span id="edSwatches" style="display:inline-flex;gap:8px;align-items:center;margin:0 6px" role="radiogroup" aria-label="Markup colour"></span>
     <button class="ed-tool edwidth" data-w="s" title="Thin stroke">Thin</button>
     <button class="ed-tool edwidth active" data-w="m" title="Medium stroke">Med</button>
@@ -862,7 +876,9 @@ body{
 
     const MAX_EDGE=2600, UNDO_MAX=15, DEG=Math.PI/180, PPD=6; // dial px per degree
     const COLORS=['#e02121','#ef5d12','#f7b500','#16a34a','#2563eb','#17191c','#ffffff'];
-    const WIDTHS={s:3,m:6,l:11};
+    const WIDTHS={s:0.0009,m:0.0017,l:0.0034};   // stroke as a fraction of the long edge
+    const WIDTH_MIN={s:1.5,m:2.5,l:5};
+    const FONT_PCT={s:0.016,m:0.025,l:0.04};     // text size as a fraction of the long edge
 
     let inst=null, work=null, wctx=null;
     let mode='crop', tool='pen', color=COLORS[0], widthKey='m';
@@ -871,7 +887,7 @@ body{
     let vDeg=0, hDeg=0, adjKey='straighten';  // perspective tilts + active dial control
     let ratio=0, sesOrigRatio=1;              // 0 = freeform
     let view={s:1,ax:0,ay:0}, dpr=1;          // screen = A + r·s  (r in rotated space)
-    let drag=null, shape=null, dialDrag=null, anim=null;
+    let drag=null, shape=null, dialDrag=null, anim=null, textBox=null;
     const pointers=new Map();
     let undoStack=[], dirtyFloor=false, restoredPristine=false;
     // Async safety: `session` invalidates continuations of a closed/reopened
@@ -961,7 +977,10 @@ body{
              Math.abs(crop.w-f.w)>0.5||Math.abs(crop.h-f.h)>0.5;
     }
     const sessionChanged=()=>thetaDeg!==0||vDeg!==0||hDeg!==0||sesRot||sesFlip||cropChanged();
-    function isDirty(){ return undoStack.length>0||dirtyFloor||sessionChanged(); }
+    function isDirty(){
+      return undoStack.length>0||dirtyFloor||sessionChanged()||
+             !!(textBox&&textBox.box.innerText.trim());
+    }
 
     /* ----- view (screen = A + r·s) ----- */
     function stageSize(){ return {w:stage.clientWidth||1,h:stage.clientHeight||1}; }
@@ -1367,7 +1386,9 @@ body{
       pointers.set(e.pointerId,localPt(e));
       if(mode==='markup'){
         if(pointers.size>1){ shape=null; render(); return; }   // second finger cancels the stroke
+        if(textBox){ commitTextBox(); return; }                // tap outside commits the text
         const p=toRot(localPt(e));
+        if(tool==='text'){ placeTextBox(p); return; }
         shape={type:tool,color:color,width:strokeW(),pts: tool==='pen'?[p]:[p,p]};
         render(); return;
       }
@@ -1442,7 +1463,13 @@ body{
     window.addEventListener('pointerup',endPointer);
 
     /* ----- markup shapes (drawn in image coordinates) ----- */
-    function strokeW(){ return WIDTHS[widthKey]*Math.max(1,Math.max(work.width,work.height)/1400); }
+    function strokeW(){
+      const E=Math.max(work.width,work.height);
+      return Math.max(WIDTH_MIN[widthKey], WIDTHS[widthKey]*E);
+    }
+    function fontPx(sizeKey){
+      return Math.max(12, FONT_PCT[sizeKey||widthKey]*Math.max(work.width,work.height));
+    }
     function drawShape(c,s){
       const p=s.pts, a=p[0], b=p[p.length-1];
       c.save();
@@ -1455,7 +1482,7 @@ body{
       }else if(s.type==='line'){
         c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke();
       }else if(s.type==='arrow'){
-        const ang=Math.atan2(b.y-a.y,b.x-a.x), head=Math.max(s.width*3.4,14);
+        const ang=Math.atan2(b.y-a.y,b.x-a.x), head=Math.max(s.width*3,10);
         c.beginPath(); c.moveTo(a.x,a.y);
         c.lineTo(b.x-head*0.6*Math.cos(ang), b.y-head*0.6*Math.sin(ang));
         c.stroke();
@@ -1480,7 +1507,11 @@ body{
     // Acrobat-style revision cloud: outward scallops walked clockwise around
     // the rectangle; overlapping sweeps (±0.5 rad) give the classic cusps.
     function cloudPath(c,r,lw){
-      const seg=Math.max(14, Math.min(Math.min(r.w,r.h)/2.5, Math.max(r.w,r.h)/6), lw*2.2);
+      // scallop size tracks the IMAGE, not the box, so large clouds keep the
+      // small even arcs of an Acrobat revision cloud instead of giant loops
+      const E=Math.max(work.width,work.height);
+      let seg=Math.max(12, lw*3, E*0.014);
+      seg=Math.min(seg, Math.max(8, Math.min(r.w,r.h)/2));
       const pts=[];
       const walk=(x0,y0,x1,y1)=>{
         const len=Math.hypot(x1-x0,y1-y0), n=Math.max(1,Math.round(len/seg));
@@ -1496,7 +1527,7 @@ body{
         const a=pts[i], b=pts[(i+1)%pts.length];
         const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
         const ang=Math.atan2(b.y-a.y,b.x-a.x), rad=Math.hypot(b.x-a.x,b.y-a.y)/2;
-        c.arc(mx,my,rad, ang+Math.PI-0.5, ang+0.5, false);
+        c.arc(mx,my,rad, ang+Math.PI-0.42, ang+0.42, false);
       }
       c.closePath();
     }
@@ -1510,6 +1541,84 @@ body{
       render();
     }
 
+    /* ----- text boxes: tap to place, type, drag by the grip; commits on
+       tapping elsewhere / switching tools / Done ----- */
+    function placeTextBox(p){
+      const wrap=document.createElement('div');
+      wrap.className='ed-textwrap';
+      const grip=document.createElement('div');
+      grip.className='ed-textgrip';
+      grip.textContent='⠿ drag';
+      const box=document.createElement('div');
+      box.className='ed-textbox';
+      box.contentEditable='true';
+      box.spellcheck=false;
+      box.setAttribute('role','textbox');
+      box.setAttribute('aria-label','Annotation text');
+      wrap.appendChild(grip); wrap.appendChild(box);
+      stage.appendChild(wrap);
+      textBox={wrap,box,grip,pos:{x:p.x,y:p.y},color:color,sizeKey:widthKey};
+      styleTextBox(); positionTextBox();
+      try{ box.focus(); }catch(_){}
+      requestAnimationFrame(()=>{ if(textBox&&textBox.box===box){ try{ box.focus(); }catch(_){} } });
+      box.addEventListener('keydown',e=>{
+        e.stopPropagation();               // Escape edits the box, not the editor
+        if(e.key==='Escape'){ e.preventDefault(); cancelTextBox(); }
+      });
+      grip.addEventListener('pointerdown',e=>{
+        e.preventDefault(); e.stopPropagation();
+        try{ grip.setPointerCapture(e.pointerId); }catch(_){}
+        const start={x:e.clientX,y:e.clientY,pos:{...textBox.pos}};
+        const mv=ev=>{
+          if(!textBox) return;
+          textBox.pos={x:start.pos.x+(ev.clientX-start.x)/view.s,
+                       y:start.pos.y+(ev.clientY-start.y)/view.s};
+          positionTextBox();
+        };
+        const done=()=>{
+          grip.removeEventListener('pointermove',mv);
+          grip.removeEventListener('pointerup',done);
+          grip.removeEventListener('pointercancel',done);
+        };
+        grip.addEventListener('pointermove',mv);
+        grip.addEventListener('pointerup',done);
+        grip.addEventListener('pointercancel',done);
+      });
+    }
+    function styleTextBox(){
+      if(!textBox) return;
+      textBox.box.style.color=textBox.color;
+      textBox.box.style.fontSize=(fontPx(textBox.sizeKey)*view.s)+'px';
+    }
+    function positionTextBox(){
+      if(!textBox) return;
+      const sp=toScreen(textBox.pos);
+      textBox.wrap.style.left=sp.x+'px';
+      textBox.wrap.style.top=sp.y+'px';
+    }
+    function cancelTextBox(){
+      if(!textBox) return;
+      textBox.wrap.remove(); textBox=null;
+    }
+    function commitTextBox(){
+      if(!textBox) return;
+      const tb=textBox;
+      const text=tb.box.innerText.replace(/\u00a0/g,' ').replace(/\s+$/,'');
+      cancelTextBox();
+      if(!text.trim()){ render(); return; }
+      pushUndoOf(work);
+      const fs=fontPx(tb.sizeKey);
+      wctx.save();
+      wctx.fillStyle=tb.color;
+      wctx.font='600 '+fs+'px "IBM Plex Sans", system-ui, sans-serif';
+      wctx.textBaseline='top';
+      // small offsets match the contenteditable's border/leading
+      const ox=tb.pos.x+4/view.s, oy=tb.pos.y+2/view.s+fs*0.125;
+      text.split('\n').forEach((ln,i)=>wctx.fillText(ln,ox,oy+i*fs*1.25));
+      wctx.restore();
+      render();
+    }
+
     /* ----- undo (blob snapshots) ----- */
     function updateUndoBtn(){ undoBtn.disabled=!undoStack.length; }
     function pushUndoOf(cv){
@@ -1520,7 +1629,9 @@ body{
       updateUndoBtn();
     }
     async function doUndo(){
-      if(busy||!undoStack.length||!work) return;
+      if(busy||!work) return;
+      if(textBox){ cancelTextBox(); render(); return; }   // undo the box being typed
+      if(!undoStack.length) return;
       const s=session;
       busy=true; undoBtn.disabled=true;
       try{
@@ -1558,6 +1669,7 @@ body{
     }
     function setMode(m){
       if(busy||!work||m===mode) return;
+      commitTextBox();
       stopAnim(); drag=null; shape=null; pointers.clear();
       if(m==='markup') commitCropSession();   // markup is WYSIWYG on the final frame
       mode=m;
@@ -1591,6 +1703,7 @@ body{
     });
     overlayE.querySelectorAll('.edtool').forEach(b=>{
       b.addEventListener('click',()=>{
+        if(b.dataset.tool!=='text') commitTextBox();
         overlayE.querySelectorAll('.edtool').forEach(x=>x.classList.remove('active'));
         b.classList.add('active'); tool=b.dataset.tool;
       });
@@ -1599,6 +1712,7 @@ body{
       b.addEventListener('click',()=>{
         overlayE.querySelectorAll('.edwidth').forEach(x=>x.classList.remove('active'));
         b.classList.add('active'); widthKey=b.dataset.w;
+        if(textBox){ textBox.sizeKey=widthKey; styleTextBox(); }
       });
     });
     const swatchWrap=$('edSwatches');
@@ -1615,6 +1729,7 @@ body{
           x.classList.remove('active'); x.setAttribute('aria-checked','false');
         });
         b.classList.add('active'); b.setAttribute('aria-checked','true'); color=c;
+        if(textBox){ textBox.color=c; styleTextBox(); }
       });
       swatchWrap.appendChild(b);
     });
@@ -1627,6 +1742,7 @@ body{
         if(s!==session) return;
         inst=photoInst;
         undoStack=[]; dirtyFloor=false; restoredPristine=false;
+        cancelTextBox();
         drag=null; shape=null; dialDrag=null; pointers.clear(); stopAnim();
         setWorkBitmap(canvasFrom(img));
         mode='crop'; beginCropSession(); applyModeUI(); updateUndoBtn();
@@ -1658,7 +1774,7 @@ body{
     function close(){
       session++;
       overlayE.classList.remove('show');
-      stopAnim();
+      stopAnim(); cancelTextBox();
       inst=null; work=null; wctx=null; cropBase=null; undoStack=[];
       drag=null; shape=null; dialDrag=null; pointers.clear();
       dirtyFloor=false; restoredPristine=false; thetaDeg=0; vDeg=0; hDeg=0; crop=null;
@@ -1672,6 +1788,7 @@ body{
     }
     async function apply(){
       if(busy||!work||!inst) return;
+      commitTextBox();
       if(!isDirty()){ close(); return; }
       const s=session, target=inst;
       // "Revert" with nothing after it restores the card to the true original
@@ -1699,13 +1816,14 @@ body{
     function refit(){
       if(!work) return;
       sizeCanvas(); view=targetView(); drawDial(); render();
+      styleTextBox(); positionTextBox();
     }
     function isOpen(){ return !!work; }
 
     // minimal state hook for automated tests
     window.__geotagEditor={ state:()=>work?{
       mode,thetaDeg,vDeg,hDeg,adjKey,crop:{...crop},workW:work.width,workH:work.height,
-      view:{...view},gl:!!gl,dirty:isDirty()}:null };
+      view:{...view},gl:!!gl,textActive:!!textBox,dirty:isDirty()}:null };
 
     return {open,cancel:requestClose,refit,isOpen};
   })();
