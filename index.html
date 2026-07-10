@@ -341,47 +341,73 @@ body{
 .pane-head .headright{display:flex;align-items:center;gap:8px;min-width:0}
 .pane-head .headright .dimReadout{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* ---------- photo editor ---------- */
-.editor-modal{max-width:min(1100px,96vw);width:100%}
-.ed-tabs{display:inline-flex;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden}
-.ed-tabs button{
-  font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;
-  padding:8px 14px;border:none;background:var(--card);color:var(--ink-soft);cursor:pointer;
-  border-right:1.5px solid var(--ink);
+/* ---------- photo editor (iPhone-Photos-style, full screen) ---------- */
+.editor{
+  position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;
+  background:#0b0b0d;color:#f2f2f4;
+  padding:calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom));
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;
 }
-.ed-tabs button:last-child{border-right:none}
-.ed-tabs button.active{background:var(--accent);color:#fff}
-.ed-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.ed-row[hidden]{display:none}
-.ed-btn{
-  border:1.5px solid var(--line-strong);background:#fff;border-radius:9px;padding:8px 11px;cursor:pointer;
-  font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.04em;color:var(--ink);
-  display:inline-flex;align-items:center;gap:6px;transition:.15s;
+.editor.show{display:flex}
+.ed-top{display:flex;align-items:center;justify-content:center;gap:10px;min-height:44px;flex-wrap:wrap}
+.ed-top[hidden]{display:none}
+.ed-icon{
+  width:40px;height:40px;border-radius:50%;border:none;background:#26262b;color:#f2f2f4;
+  display:inline-flex;align-items:center;justify-content:center;font-size:17px;line-height:1;cursor:pointer;
+  transition:background .15s;
 }
-.ed-btn:hover{border-color:var(--ink)}
-.ed-btn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
-.ed-btn:disabled{opacity:.35;cursor:not-allowed}
-.ed-sep{width:1px;align-self:stretch;background:var(--line-strong);margin:0 4px}
-.ed-slider{
-  display:inline-flex;align-items:center;gap:8px;
-  font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--ink-soft);
+.ed-icon:hover{background:#37373d}
+.ed-icon:disabled{opacity:.35;cursor:default}
+.ed-text{
+  border:none;background:none;color:#f2f2f4;font-family:'IBM Plex Mono',monospace;
+  font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+  padding:10px 12px;border-radius:9px;transition:background .15s;
 }
-.ed-slider input[type=range]{width:170px;accent-color:var(--accent)}
-.ed-angle{min-width:48px;text-align:right;color:var(--ink)}
-.ed-swatches{display:inline-flex;align-items:center;gap:7px}
-.ed-swatch{
-  width:24px;height:24px;border-radius:50%;border:2px solid #fff;
-  box-shadow:0 0 0 1.5px var(--line-strong);cursor:pointer;padding:0;
+.ed-text:hover{background:#26262b}
+.ed-text:disabled{opacity:.35;cursor:default}
+.ed-text.warn{color:#ff7a5c}
+.ed-aspects{display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap;min-height:36px}
+.ed-aspects[hidden]{display:none}
+.ed-chip{
+  border:1px solid #3a3a40;background:#1a1a1e;color:#c9c9cf;border-radius:999px;
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:6px 12px;cursor:pointer;transition:.15s;
 }
-.ed-swatch.active{box-shadow:0 0 0 2.5px var(--ink)}
-.ed-canvas-wrap{
-  background:#26282d;border:1.5px solid var(--ink);border-radius:10px;
-  display:flex;justify-content:center;align-items:center;overflow:hidden;
-  min-height:120px;
+.ed-chip.active{background:#f2f2f4;color:#131316;border-color:#f2f2f4}
+.ed-stage{flex:1;min-height:140px;position:relative;margin:8px 0}
+#editorCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.ed-dial-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;min-height:62px;justify-content:center}
+.ed-dial-wrap[hidden]{display:none}
+.ed-dial-val{font-family:'IBM Plex Mono',monospace;font-size:.8rem;color:var(--accent);min-height:18px}
+#edDial{width:min(340px,86vw);height:40px;display:block;touch-action:none;cursor:ew-resize}
+.ed-tools{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;min-height:62px}
+.ed-tools[hidden]{display:none}
+.ed-tool{
+  border:1px solid #3a3a40;background:#1a1a1e;color:#e6e6ea;border-radius:10px;
+  font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.04em;
+  padding:9px 11px;cursor:pointer;transition:.15s;
 }
-#editorCanvas{display:block;max-width:100%;touch-action:none}
-.editor-modal .modal-actions{align-items:center}
-.editor-modal .modal-actions .spacer{flex:1}
+.ed-tool.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.ed-dot{
+  width:26px;height:26px;border-radius:50%;border:2.5px solid #0b0b0d;
+  box-shadow:0 0 0 1.5px #55555c;cursor:pointer;padding:0;
+}
+.ed-dot.active{box-shadow:0 0 0 2.5px #fff}
+.ed-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:54px}
+.ed-modes{display:flex;gap:6px;justify-content:center}
+.ed-mode{
+  border:none;background:none;color:#9a9aa1;font-family:'IBM Plex Mono',monospace;
+  font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+  padding:10px 13px;border-radius:10px;display:inline-flex;align-items:center;gap:7px;transition:.15s;
+}
+.ed-mode.active{color:#fff;background:#26262b}
+.ed-done{
+  width:46px;height:46px;border-radius:50%;border:none;background:var(--accent);color:#fff;
+  font-size:20px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  transition:transform .12s;
+}
+.ed-done:hover{transform:scale(1.06)}
+.ed-done:disabled{opacity:.4;transform:none}
 
 /* ---------- update banner ---------- */
 .update-bar{
@@ -446,7 +472,7 @@ body{
       <span>Photos are read in your browser. Nothing is uploaded — coordinates never leave this device (map tiles &amp; optional address lookup excepted).</span>
       <!-- keep in sync with CACHE_VERSION in sw.js — this is how you tell a
            stale cached build from the current deploy at a glance -->
-      <span class="buildtag" style="margin-left:auto;white-space:nowrap;color:var(--ink-faint)">BUILD V8</span>
+      <span class="buildtag" style="margin-left:auto;white-space:nowrap;color:var(--ink-faint)">BUILD V9</span>
     </div>
   </header>
 
@@ -496,52 +522,49 @@ body{
   </div>
 </div>
 
-<div class="overlay" id="editorOverlay">
-  <div class="modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editorTitle" tabindex="-1">
-    <button class="modal-close" id="editorCloseBtn" aria-label="Close editor">&times;</button>
-    <h3 id="editorTitle">Edit photo</h3>
-    <div class="hint">Crop, rotate &amp; straighten under Adjust · draw callouts under Markup. Edits only change the report picture — the original file and its GPS data are untouched.</div>
-    <div class="ed-row">
-      <div class="ed-tabs" role="tablist" aria-label="Editor mode">
-        <button id="edTabAdjust" class="active" role="tab" aria-selected="true" aria-controls="edAdjustRow">Adjust</button>
-        <button id="edTabMarkup" role="tab" aria-selected="false" aria-controls="edMarkupRow">Markup</button>
-      </div>
-      <button class="ed-btn" id="edUndo" disabled style="margin-left:auto" title="Undo last change">↩ Undo</button>
+<div class="editor" id="editorOverlay" role="dialog" aria-modal="true" aria-label="Edit photo" tabindex="-1">
+  <div class="ed-top" id="edTopCrop">
+    <button class="ed-icon" id="edFlip" title="Flip horizontally" aria-label="Flip horizontally">⇋</button>
+    <button class="ed-icon" id="edRotate" title="Rotate 90°" aria-label="Rotate 90 degrees">⟲</button>
+    <span style="flex:1"></span>
+    <button class="ed-text" id="edOriginal" title="Discard every edit and go back to the photo as uploaded">Revert</button>
+    <button class="ed-text warn" id="edReset" hidden>Reset</button>
+  </div>
+  <div class="ed-top" id="edTopMarkup" hidden>
+    <button class="ed-icon" id="edUndo" disabled title="Undo last stroke" aria-label="Undo">↩</button>
+  </div>
+  <div class="ed-aspects" id="edAspects" role="radiogroup" aria-label="Aspect ratio">
+    <button class="ed-chip active" data-r="free">Free</button>
+    <button class="ed-chip" data-r="orig">Original</button>
+    <button class="ed-chip" data-r="1">Square</button>
+    <button class="ed-chip" data-r="4:3">4:3</button>
+    <button class="ed-chip" data-r="3:2">3:2</button>
+    <button class="ed-chip" data-r="16:9">16:9</button>
+  </div>
+  <div class="ed-stage" id="edStage"><canvas id="editorCanvas"></canvas></div>
+  <div class="ed-dial-wrap" id="edDialWrap">
+    <div class="ed-dial-val" id="edDialVal">0°</div>
+    <canvas id="edDial" aria-label="Straighten dial — drag sideways to rotate"></canvas>
+  </div>
+  <div class="ed-tools" id="edTools" hidden>
+    <button class="ed-tool edtool active" data-tool="pen" title="Freehand pen">✎ Pen</button>
+    <button class="ed-tool edtool" data-tool="line" title="Straight line">╱ Line</button>
+    <button class="ed-tool edtool" data-tool="arrow" title="Arrow">➔ Arrow</button>
+    <button class="ed-tool edtool" data-tool="box" title="Rectangle">▭ Box</button>
+    <button class="ed-tool edtool" data-tool="ellipse" title="Ellipse">◯ Ellipse</button>
+    <button class="ed-tool edtool" data-tool="cloud" title="Revision cloud">☁ Cloud</button>
+    <span id="edSwatches" style="display:inline-flex;gap:8px;align-items:center;margin:0 6px" role="radiogroup" aria-label="Markup colour"></span>
+    <button class="ed-tool edwidth" data-w="s" title="Thin stroke">Thin</button>
+    <button class="ed-tool edwidth active" data-w="m" title="Medium stroke">Med</button>
+    <button class="ed-tool edwidth" data-w="l" title="Thick stroke">Thick</button>
+  </div>
+  <div class="ed-bottom">
+    <button class="ed-text" id="edCancel">Cancel</button>
+    <div class="ed-modes">
+      <button class="ed-mode active" id="edModeCrop" aria-label="Crop and rotate">▢ Crop</button>
+      <button class="ed-mode" id="edModeMarkup" aria-label="Markup">✎ Markup</button>
     </div>
-    <div class="ed-row" id="edAdjustRow">
-      <button class="ed-btn" id="edRotL" title="Rotate 90° left">⟲ 90°</button>
-      <button class="ed-btn" id="edRotR" title="Rotate 90° right">⟳ 90°</button>
-      <button class="ed-btn" id="edFlipH" title="Flip horizontally">⇋ Flip H</button>
-      <button class="ed-btn" id="edFlipV" title="Flip vertically">⇵ Flip V</button>
-      <span class="ed-sep" aria-hidden="true"></span>
-      <label class="ed-slider">Straighten
-        <input type="range" id="edAngle" min="-45" max="45" step="0.5" value="0" aria-label="Fine rotation angle in degrees">
-        <span class="ed-angle" id="edAngleVal">0°</span>
-      </label>
-      <span class="ed-sep" aria-hidden="true"></span>
-      <button class="ed-btn" id="edCropReset" title="Reset the crop selection to the full frame">▣ Full frame</button>
-    </div>
-    <div class="ed-row" id="edMarkupRow" hidden>
-      <button class="ed-btn edtool active" data-tool="pen" title="Freehand pen">✎ Pen</button>
-      <button class="ed-btn edtool" data-tool="line" title="Straight line">╱ Line</button>
-      <button class="ed-btn edtool" data-tool="arrow" title="Arrow">➔ Arrow</button>
-      <button class="ed-btn edtool" data-tool="box" title="Rectangle">▭ Box</button>
-      <button class="ed-btn edtool" data-tool="ellipse" title="Ellipse">◯ Ellipse</button>
-      <button class="ed-btn edtool" data-tool="cloud" title="Revision cloud">☁ Cloud</button>
-      <span class="ed-sep" aria-hidden="true"></span>
-      <span class="ed-swatches" id="edSwatches" role="radiogroup" aria-label="Markup colour"></span>
-      <span class="ed-sep" aria-hidden="true"></span>
-      <button class="ed-btn edwidth" data-w="s" title="Thin stroke">Thin</button>
-      <button class="ed-btn edwidth active" data-w="m" title="Medium stroke">Med</button>
-      <button class="ed-btn edwidth" data-w="l" title="Thick stroke">Thick</button>
-    </div>
-    <div class="ed-canvas-wrap"><canvas id="editorCanvas"></canvas></div>
-    <div class="modal-actions">
-      <button class="btn ghost" id="edOriginal" title="Discard every edit and reload the original photo">↺ Restore original</button>
-      <span class="spacer"></span>
-      <button class="btn" id="edCancel">Cancel</button>
-      <button class="btn accent" id="edApply">✓ Apply</button>
-    </div>
+    <button class="ed-done" id="edApply" title="Done" aria-label="Done">✓</button>
   </div>
 </div>
 
@@ -786,176 +809,472 @@ body{
     finally{ exportBusy=false; btn.disabled=false; btn.innerHTML=label; }
   }
 
-  /* ---------- photo editor: crop / rotate / straighten / flip / markup ----------
-     One shared modal. Edits work on an offscreen "work" canvas (longest edge
-     capped so undo snapshots stay affordable); every committed operation bakes
-     into the bitmap after pushing a JPEG snapshot onto the undo stack. Applying
-     hands the card a new blob — the original file (and its EXIF/GPS) is never
-     touched, so coordinates and filenames are unaffected. */
+  /* ---------- photo editor — iPhone-Photos-style crop/straighten + markup ----------
+     Crop model: the crop rectangle lives in "rotated space" (image space rotated
+     by the straighten angle about the image centre). Pinch/pan/dial/wheel keep
+     the frame fixed on screen and move the image beneath it; dragging a corner
+     or edge moves the frame itself and the view re-fits on release — the same
+     interaction grammar as the iOS Photos editor. 90° rotation and mirroring
+     bake losslessly into the working bitmap at once; the straighten angle and
+     crop bake once per crop session (a single undo step). Markup strokes bake
+     per stroke with JPEG-snapshot undo. Applying hands the card a new blob —
+     the original file and its EXIF/GPS are never touched. */
   const editor=(function(){
-    const overlayE=$('editorOverlay'), canvas=$('editorCanvas'), dctx=canvas.getContext('2d');
-    const wrap=canvas.parentElement;
-    const tabAdjust=$('edTabAdjust'), tabMarkup=$('edTabMarkup');
-    const rowAdjust=$('edAdjustRow'), rowMarkup=$('edMarkupRow');
-    const angleSlider=$('edAngle'), angleVal=$('edAngleVal');
-    const undoBtn=$('edUndo'), applyBtn=$('edApply');
+    const overlayE=$('editorOverlay'), stage=$('edStage'),
+          canvas=$('editorCanvas'), dctx=canvas.getContext('2d');
+    const dial=$('edDial'), dialCtx=dial.getContext('2d'),
+          dialVal=$('edDialVal'), dialWrap=$('edDialWrap');
+    const topCrop=$('edTopCrop'), topMarkup=$('edTopMarkup'),
+          aspectsRow=$('edAspects'), toolsRow=$('edTools');
+    const undoBtn=$('edUndo'), applyBtn=$('edApply'), resetBtn=$('edReset');
+    const modeCropBtn=$('edModeCrop'), modeMarkupBtn=$('edModeMarkup');
 
-    const MAX_EDGE=2600, UNDO_MAX=15, MIN_CROP=24;
+    const MAX_EDGE=2600, UNDO_MAX=15, DEG=Math.PI/180, PPD=6; // dial px per degree
     const COLORS=['#e02121','#ef5d12','#f7b500','#16a34a','#2563eb','#17191c','#ffffff'];
     const WIDTHS={s:3,m:6,l:11};
 
     let inst=null, work=null, wctx=null;
-    let mode='adjust', tool='pen', color=COLORS[0], widthKey='m';
-    let angle=0;          // uncommitted straighten angle (deg)
-    let crop=null;        // uncommitted crop rect in work px; null = full frame
-    let drag=null, shape=null;
-    let undoStack=[];     // Promise<Blob> snapshots, oldest first
-    let viewScale=1, dpr=1;
-    // Async safety: `session` invalidates continuations from a closed/reopened
-    // editor (each await re-checks it); `busy` serializes bitmap mutations so
-    // e.g. a rotate can't interleave with an undo that is still decoding.
-    let session=0, busy=false;
-    let dirtyFloor=false;        // snapshots were dropped by the undo cap — edits remain baked
-    let restoredPristine=false;  // work bitmap is exactly the untouched original
-    let activePtr=null;          // pointerId of the active gesture (ignore other fingers)
-    let lastFocus=null;
+    let mode='crop', tool='pen', color=COLORS[0], widthKey='m';
+    // crop-session state
+    let thetaDeg=0, crop=null, cropBase=null, sesRot=false, sesFlip=false;
+    let ratio=0, sesOrigRatio=1;              // 0 = freeform
+    let view={s:1,ax:0,ay:0}, dpr=1;          // screen = A + r·s  (r in rotated space)
+    let drag=null, shape=null, dialDrag=null, anim=null;
+    const pointers=new Map();
+    let undoStack=[], dirtyFloor=false, restoredPristine=false;
+    // Async safety: `session` invalidates continuations of a closed/reopened
+    // editor; `busy` serializes bitmap mutations against pending awaits.
+    let session=0, busy=false, lastFocus=null;
 
+    /* ----- small helpers ----- */
     function loadImage(src){
       return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
     }
-    function canvasFrom(img,maxEdge){
-      const sc=Math.min(1,(maxEdge||MAX_EDGE)/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+    function canvasFrom(img){
+      const sc=Math.min(1,MAX_EDGE/Math.max(img.naturalWidth,img.naturalHeight));
       const c=document.createElement('canvas');
-      c.width=Math.max(1,Math.round((img.naturalWidth||img.width)*sc));
-      c.height=Math.max(1,Math.round((img.naturalHeight||img.height)*sc));
+      c.width=Math.max(1,Math.round(img.naturalWidth*sc));
+      c.height=Math.max(1,Math.round(img.naturalHeight*sc));
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
       return c;
     }
-    function setWork(c){ work=c; wctx=c.getContext('2d'); fitCanvas(); }
-    function effCrop(){ return crop||{x:0,y:0,w:work.width,h:work.height}; }
-    function cropIsReal(){
-      if(!crop) return false;
-      const r=effCrop();
-      return Math.round(r.x)>0||Math.round(r.y)>0||
-             Math.round(r.x+r.w)<work.width||Math.round(r.y+r.h)<work.height;
+    function setWorkBitmap(c){ work=c; wctx=c.getContext('2d'); }
+    const theta=()=>thetaDeg*DEG;
+    const imgC=()=>({x:work.width/2,y:work.height/2});
+    function rotP(p,c,ang){
+      const cos=Math.cos(ang),sin=Math.sin(ang),dx=p.x-c.x,dy=p.y-c.y;
+      return {x:c.x+dx*cos-dy*sin, y:c.y+dx*sin+dy*cos};
     }
-    function strokeW(){ return WIDTHS[widthKey]*Math.max(1,Math.max(work.width,work.height)/1400); }
-    function normRect(a,b){
-      return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)};
+    const toImagePt=r=>rotP(r,imgC(),-theta());
+    const fullCrop=()=>({x:0,y:0,w:work.width,h:work.height});
+    function validRect(r){
+      const W=work.width,H=work.height;
+      const pts=[{x:r.x,y:r.y},{x:r.x+r.w,y:r.y},{x:r.x+r.w,y:r.y+r.h},{x:r.x,y:r.y+r.h}];
+      return pts.every(p=>{ const q=toImagePt(p);
+        return q.x>=-0.6&&q.y>=-0.6&&q.x<=W+0.6&&q.y<=H+0.6; });
     }
-
-    // Largest axis-aligned rectangle inscribed in a w×h rect rotated by rad
-    // (standard "rotatedRectWithMaxArea"); |rad| <= 45° here.
-    function inscribedRect(w,h,rad){
-      const a=Math.abs(rad);
-      if(!w||!h||!a) return {w:w,h:h};
-      const sin=Math.sin(a),cos=Math.cos(a);
-      const shortS=Math.min(w,h);
-      let rw,rh;
-      if(shortS<=2*sin*cos*Math.max(w,h) || Math.abs(sin-cos)<1e-9){
-        const x=0.5*shortS;
-        if(w>=h){ rw=x/sin; rh=x/cos; } else { rw=x/cos; rh=x/sin; }
-      }else{
-        const cos2=cos*cos-sin*sin;
-        rw=(w*cos-h*sin)/cos2; rh=(h*cos-w*sin)/cos2;
+    const lerpN=(a,b,t)=>a+(b-a)*t;
+    const lerpRect=(a,b,t)=>({x:lerpN(a.x,b.x,t),y:lerpN(a.y,b.y,t),w:lerpN(a.w,b.w,t),h:lerpN(a.h,b.h,t)});
+    // Largest valid rect between a known-good rect and a desired one.
+    function clampRect(from,to){
+      if(validRect(to)) return to;
+      let lo=0,hi=1;
+      for(let i=0;i<22;i++){ const m=(lo+hi)/2; if(validRect(lerpRect(from,to,m))) lo=m; else hi=m; }
+      return lerpRect(from,to,lo);
+    }
+    // Shrink a rect about its own centre until it fits inside the image.
+    function shrinkValid(cand){
+      if(validRect(cand)) return cand;
+      const c={x:cand.x+cand.w/2,y:cand.y+cand.h/2};
+      let lo=0,hi=1;
+      for(let i=0;i<22;i++){
+        const m=(lo+hi)/2;
+        const r={x:c.x-cand.w*m/2,y:c.y-cand.h*m/2,w:cand.w*m,h:cand.h*m};
+        if(validRect(r)) lo=m; else hi=m;
       }
-      return {w:Math.max(1,rw),h:Math.max(1,rh)};
+      return {x:c.x-cand.w*lo/2,y:c.y-cand.h*lo/2,w:Math.max(1,cand.w*lo),h:Math.max(1,cand.h*lo)};
+    }
+    const minCrop=()=>Math.max(16,Math.min(work.width,work.height)/40);
+    function cropChanged(){
+      const f=fullCrop();
+      return Math.abs(crop.x-f.x)>0.5||Math.abs(crop.y-f.y)>0.5||
+             Math.abs(crop.w-f.w)>0.5||Math.abs(crop.h-f.h)>0.5;
+    }
+    const sessionChanged=()=>thetaDeg!==0||sesRot||sesFlip||cropChanged();
+    function isDirty(){ return undoStack.length>0||dirtyFloor||sessionChanged(); }
+
+    /* ----- view (screen = A + r·s) ----- */
+    function stageSize(){ return {w:stage.clientWidth||1,h:stage.clientHeight||1}; }
+    function sizeCanvas(){
+      dpr=Math.min(window.devicePixelRatio||1,2);
+      const s=stageSize();
+      canvas.width=Math.max(1,Math.round(s.w*dpr));
+      canvas.height=Math.max(1,Math.round(s.h*dpr));
+    }
+    function targetView(){
+      const s=stageSize(), pad=16;
+      const sc=Math.max(0.001,Math.min((s.w-pad*2)/crop.w,(s.h-pad*2)/crop.h));
+      return {s:sc, ax:(s.w-crop.w*sc)/2-crop.x*sc, ay:(s.h-crop.h*sc)/2-crop.y*sc};
+    }
+    const toRot=p=>({x:(p.x-view.ax)/view.s,y:(p.y-view.ay)/view.s});
+    const toScreen=r=>({x:view.ax+r.x*view.s,y:view.ay+r.y*view.s});
+    function stopAnim(){ if(anim){ cancelAnimationFrame(anim.raf); anim=null; } }
+    function animateView(ms){
+      stopAnim();
+      const from={...view}, to=targetView(), t0=performance.now();
+      const a={};
+      a.raf=requestAnimationFrame(function step(now){
+        if(anim!==a) return;
+        const t=Math.min(1,(now-t0)/ms), e=1-Math.pow(1-t,3);
+        view={s:lerpN(from.s,to.s,e),ax:lerpN(from.ax,to.ax,e),ay:lerpN(from.ay,to.ay,e)};
+        render();
+        if(t<1) a.raf=requestAnimationFrame(step); else anim=null;
+      });
+      anim=a;
     }
 
-    /* ----- undo ----- */
-    function updateUndoBtn(){ undoBtn.disabled=!undoStack.length; }
-    function isDirty(){ return undoStack.length>0||dirtyFloor||angle!==0||cropIsReal(); }
-    function pushUndo(){
-      restoredPristine=false;
-      const p=new Promise(res=>work.toBlob(res,'image/jpeg',0.92));
-      undoStack.push(p);
-      if(undoStack.length>UNDO_MAX){ undoStack.shift(); dirtyFloor=true; }
-      updateUndoBtn();
+    /* ----- render ----- */
+    function render(){
+      if(!work) return;
+      const s=stageSize();
+      dctx.setTransform(1,0,0,1,0,0);
+      dctx.clearRect(0,0,canvas.width,canvas.height);
+      dctx.setTransform(dpr*view.s,0,0,dpr*view.s,dpr*view.ax,dpr*view.ay);
+      const c=imgC();
+      dctx.save();
+      dctx.translate(c.x,c.y); dctx.rotate(theta()); dctx.translate(-c.x,-c.y);
+      dctx.drawImage(work,0,0);
+      dctx.restore();
+      if(mode==='crop') drawCropUI(s);
+      else if(shape){
+        // preview clipped to the photo, matching what baking will keep
+        dctx.save();
+        dctx.beginPath(); dctx.rect(0,0,work.width,work.height); dctx.clip();
+        drawShape(dctx,shape);
+        dctx.restore();
+      }
     }
-    async function doUndo(){
-      if(busy||!undoStack.length||!work) return;
-      const s=session;
-      busy=true; undoBtn.disabled=true;
-      try{
-        const blob=await undoStack.pop();
-        if(s!==session) return;                    // editor closed / reopened meanwhile
-        if(blob){
-          const url=URL.createObjectURL(blob);
-          try{
-            const img=await loadImage(url);
-            if(s!==session) return;
-            const c=document.createElement('canvas');
-            c.width=img.naturalWidth; c.height=img.naturalHeight;
-            c.getContext('2d').drawImage(img,0,0);
-            angle=0; angleSlider.value='0'; angleVal.textContent='0°';
-            crop=null; drag=null; shape=null; restoredPristine=false;
-            setWork(c);
-          }finally{ URL.revokeObjectURL(url); }
+    function drawCropUI(s){
+      const r=crop, lw=n=>n/view.s;
+      const r0=toRot({x:0,y:0}), r1=toRot({x:s.w,y:s.h});
+      dctx.fillStyle='rgba(6,6,8,.62)';
+      dctx.fillRect(r0.x,r0.y,r1.x-r0.x,r.y-r0.y);
+      dctx.fillRect(r0.x,r.y+r.h,r1.x-r0.x,r1.y-(r.y+r.h));
+      dctx.fillRect(r0.x,r.y,r.x-r0.x,r.h);
+      dctx.fillRect(r.x+r.w,r.y,r1.x-(r.x+r.w),r.h);
+      // grid (denser while the straighten dial is active, like iOS)
+      const n=dialDrag?9:3;
+      dctx.strokeStyle='rgba(255,255,255,.3)';
+      dctx.lineWidth=lw(1);
+      dctx.beginPath();
+      for(let i=1;i<n;i++){
+        dctx.moveTo(r.x+r.w*i/n,r.y); dctx.lineTo(r.x+r.w*i/n,r.y+r.h);
+        dctx.moveTo(r.x,r.y+r.h*i/n); dctx.lineTo(r.x+r.w,r.y+r.h*i/n);
+      }
+      dctx.stroke();
+      dctx.strokeStyle='rgba(255,255,255,.92)'; dctx.lineWidth=lw(1.5);
+      dctx.strokeRect(r.x,r.y,r.w,r.h);
+      // iOS-style corner brackets + edge bars
+      const L=Math.min(lw(22),r.w/3,r.h/3), T=lw(4);
+      dctx.fillStyle='#fff';
+      const cs=[[r.x,r.y,1,1],[r.x+r.w,r.y,-1,1],[r.x+r.w,r.y+r.h,-1,-1],[r.x,r.y+r.h,1,-1]];
+      for(const [x,y,sx,sy] of cs){
+        dctx.fillRect(sx>0?x-T/2:x-L+T/2, y-T/2, L, T);
+        dctx.fillRect(x-T/2, sy>0?y-T/2:y-L+T/2, T, L);
+      }
+      const mb=Math.min(lw(26),r.w/3), mv=Math.min(lw(26),r.h/3);
+      dctx.fillRect(r.x+r.w/2-mb/2, r.y-T/2, mb, T);
+      dctx.fillRect(r.x+r.w/2-mb/2, r.y+r.h-T/2, mb, T);
+      dctx.fillRect(r.x-T/2, r.y+r.h/2-mv/2, T, mv);
+      dctx.fillRect(r.x+r.w-T/2, r.y+r.h/2-mv/2, T, mv);
+    }
+
+    /* ----- straighten dial ----- */
+    function drawDial(){
+      const w=dial.clientWidth||300, h=40;
+      dial.width=Math.round(w*dpr); dial.height=Math.round(h*dpr);
+      const x=dialCtx;
+      x.setTransform(dpr,0,0,dpr,0,0);
+      x.clearRect(0,0,w,h);
+      const cx=w/2;
+      for(let v=Math.ceil(thetaDeg-cx/PPD); v<=Math.floor(thetaDeg+cx/PPD); v++){
+        if(v<-45||v>45) continue;
+        const px=cx+(v-thetaDeg)*PPD, major=v%5===0;
+        x.strokeStyle=major?'rgba(255,255,255,.75)':'rgba(255,255,255,.28)';
+        x.beginPath(); x.moveTo(px,h-6-(major?13:8)); x.lineTo(px,h-6); x.stroke();
+        if(v%15===0){
+          x.fillStyle='rgba(255,255,255,.6)';
+          x.font='9px "IBM Plex Mono",monospace'; x.textAlign='center';
+          x.fillText(String(v),px,10);
         }
-      }catch(e){ console.error('editor undo',e); }
-      finally{ busy=false; updateUndoBtn(); render(); }
-    }
-
-    /* ----- geometry commits (each bakes into the work bitmap) ----- */
-    function commitAngle(){
-      if(!angle) return;
-      const rad=angle*Math.PI/180, ins=inscribedRect(work.width,work.height,rad);
-      pushUndo();
-      const c=document.createElement('canvas');
-      c.width=Math.max(1,Math.round(ins.w)); c.height=Math.max(1,Math.round(ins.h));
-      const x=c.getContext('2d');
-      x.translate(c.width/2,c.height/2); x.rotate(rad);
-      x.drawImage(work,-work.width/2,-work.height/2);
-      angle=0; angleSlider.value='0'; angleVal.textContent='0°'; crop=null;
-      setWork(c);
-    }
-    function commitCrop(){
-      if(!cropIsReal()){ crop=null; return; }
-      const r=effCrop();
-      const sx=Math.round(r.x), sy=Math.round(r.y),
-            sw=Math.max(1,Math.round(r.w)), sh=Math.max(1,Math.round(r.h));
-      pushUndo();
-      const c=document.createElement('canvas');
-      c.width=sw; c.height=sh;
-      c.getContext('2d').drawImage(work,sx,sy,sw,sh,0,0,sw,sh);
-      crop=null;
-      setWork(c);
-    }
-    function rotate90(cw){
-      if(busy||!work) return;
-      commitAngle();
-      pushUndo();
-      const c=document.createElement('canvas');
-      c.width=work.height; c.height=work.width;
-      const x=c.getContext('2d');
-      if(cw){ x.translate(c.width,0); x.rotate(Math.PI/2); }
-      else{ x.translate(0,c.height); x.rotate(-Math.PI/2); }
-      x.drawImage(work,0,0);
-      if(crop){
-        crop = cw
-          ? {x:work.height-crop.y-crop.h, y:crop.x, w:crop.h, h:crop.w}
-          : {x:crop.y, y:work.width-crop.x-crop.w, w:crop.h, h:crop.w};
       }
-      setWork(c); render();
+      x.fillStyle='#ef5d12';
+      x.fillRect(cx-1,h-27,2,22);
+      x.beginPath(); x.moveTo(cx-4,h-31); x.lineTo(cx+4,h-31); x.lineTo(cx,h-25); x.closePath(); x.fill();
+      dialVal.textContent=thetaDeg?((thetaDeg>0?'+':'')+(Math.round(thetaDeg*10)/10)+'°'):'0°';
+      dialVal.style.opacity=thetaDeg?1:.55;
     }
-    function flip(horiz){
-      if(busy||!work) return;
-      commitAngle();
-      pushUndo();
-      const c=document.createElement('canvas');
-      c.width=work.width; c.height=work.height;
-      const x=c.getContext('2d');
-      if(horiz){ x.translate(c.width,0); x.scale(-1,1); }
-      else{ x.translate(0,c.height); x.scale(1,-1); }
-      x.drawImage(work,0,0);
-      if(crop){
-        if(horiz) crop={x:work.width-crop.x-crop.w,y:crop.y,w:crop.w,h:crop.h};
-        else crop={x:crop.x,y:work.height-crop.y-crop.h,w:crop.w,h:crop.h};
-      }
-      setWork(c); render();
+    function setThetaFromBase(t,base){
+      thetaDeg=t;
+      const cNew=rotP(base.q,imgC(),theta());
+      let cand={x:cNew.x-base.w/2,y:cNew.y-base.h/2,w:base.w,h:base.h};
+      cand=shrinkValid(cand);          // auto-zoom to keep the frame covered
+      crop=cand; view=targetView();
+      drawDial(); render(); syncSessionUI();
     }
+    dial.addEventListener('pointerdown',e=>{
+      if(!work||busy||mode!=='crop') return;
+      e.preventDefault(); stopAnim();
+      try{ dial.setPointerCapture(e.pointerId); }catch(_){}
+      dialDrag={x0:e.clientX, t0:thetaDeg,
+                q:toImagePt({x:crop.x+crop.w/2,y:crop.y+crop.h/2}), w:crop.w, h:crop.h};
+    });
+    dial.addEventListener('pointermove',e=>{
+      if(!dialDrag||!work) return;
+      let t=dialDrag.t0-(e.clientX-dialDrag.x0)/PPD;
+      t=Math.max(-45,Math.min(45,Math.round(t*10)/10));
+      if(Math.abs(t)<0.35) t=0;        // gentle snap at zero, like iOS
+      setThetaFromBase(t,dialDrag);
+    });
+    const endDial=()=>{ if(dialDrag){ dialDrag=null; drawDial(); render(); } };
+    dial.addEventListener('pointerup',endDial);
+    dial.addEventListener('pointercancel',endDial);
 
-    /* ----- markup shapes ----- */
+    /* ----- crop-session ops ----- */
+    function beginCropSession(){
+      cropBase=work;
+      sesOrigRatio=work.width/work.height;
+      thetaDeg=0; crop=fullCrop(); sesRot=false; sesFlip=false;
+      setRatioChip('free'); ratio=0;
+      drawDial(); syncSessionUI();
+    }
+    function commitCropSession(){
+      if(!work||!cropBase) return;
+      if(!sessionChanged()){ cropBase=null; return; }
+      pushUndoOf(cropBase);            // the whole session is one undo step
+      const out=document.createElement('canvas');
+      out.width=Math.max(1,Math.round(crop.w));
+      out.height=Math.max(1,Math.round(crop.h));
+      const x=out.getContext('2d'), c=imgC();
+      x.translate(-crop.x,-crop.y);
+      x.translate(c.x,c.y); x.rotate(theta()); x.translate(-c.x,-c.y);
+      x.drawImage(work,0,0);
+      setWorkBitmap(out);
+      thetaDeg=0; crop=fullCrop(); sesRot=false; sesFlip=false; cropBase=null;
+    }
+    function resetSession(){
+      if(busy||!work||!cropBase) return;
+      setWorkBitmap(cropBase);
+      beginCropSession();
+      sizeCanvas(); view=targetView(); render();
+    }
+    function rotate90(){
+      if(busy||!work||mode!=='crop') return;
+      stopAnim();
+      const W=work.width;
+      const q=toImagePt({x:crop.x+crop.w/2,y:crop.y+crop.h/2});
+      const nc=document.createElement('canvas');
+      nc.width=work.height; nc.height=work.width;
+      const x=nc.getContext('2d');
+      x.translate(0,nc.height); x.rotate(-Math.PI/2); x.drawImage(work,0,0);
+      setWorkBitmap(nc);
+      const q2={x:q.y,y:W-q.x};                       // the same point after 90° CCW
+      const c2=rotP(q2,imgC(),theta());
+      crop=shrinkValid({x:c2.x-crop.h/2,y:c2.y-crop.w/2,w:crop.h,h:crop.w});
+      sesRot=true;
+      view=targetView(); render(); syncSessionUI();
+    }
+    function flipH(){
+      if(busy||!work||mode!=='crop') return;
+      stopAnim();
+      const W=work.width;
+      const q=toImagePt({x:crop.x+crop.w/2,y:crop.y+crop.h/2});
+      const nc=document.createElement('canvas');
+      nc.width=W; nc.height=work.height;
+      const x=nc.getContext('2d');
+      x.translate(W,0); x.scale(-1,1); x.drawImage(work,0,0);
+      setWorkBitmap(nc);
+      thetaDeg=-thetaDeg;                             // mirroring flips the tilt
+      const c2=rotP({x:W-q.x,y:q.y},imgC(),theta());
+      crop=shrinkValid({x:c2.x-crop.w/2,y:c2.y-crop.h/2,w:crop.w,h:crop.h});
+      sesFlip=!sesFlip;
+      view=targetView(); drawDial(); render(); syncSessionUI();
+    }
+    function setRatioChip(key){
+      aspectsRow.querySelectorAll('.ed-chip').forEach(ch=>{
+        ch.classList.toggle('active',ch.dataset.r===key);
+        ch.setAttribute('aria-checked',String(ch.dataset.r===key));
+      });
+    }
+    function applyRatio(key){
+      if(busy||!work||mode!=='crop') return;
+      setRatioChip(key);
+      if(key==='free'){ ratio=0; syncSessionUI(); return; }
+      let p=key==='orig'?sesOrigRatio:(key.includes(':')?(key.split(':').map(Number).reduce((a,b)=>a/b)):Number(key));
+      // orient the preset to the frame's current orientation
+      if((crop.w>=crop.h&&p<1)||(crop.w<crop.h&&p>1)) p=1/p;
+      ratio=p;
+      const c={x:crop.x+crop.w/2,y:crop.y+crop.h/2};
+      const area=crop.w*crop.h;
+      const w=Math.sqrt(area*p), h=w/p;
+      crop=shrinkValid({x:c.x-w/2,y:c.y-h/2,w,h});
+      animateView(160); syncSessionUI();
+    }
+    function syncSessionUI(){ resetBtn.hidden=!(mode==='crop'&&sessionChanged()); }
+
+    /* ----- pan / zoom (frame stays put, image moves) ----- */
+    function panBy(d){
+      const cand={...crop,x:crop.x-d.x/view.s,y:crop.y-d.y/view.s};
+      crop=clampRect(crop,cand);
+      view=targetView();
+      render();
+    }
+    function zoomAt(f,mScr){
+      const m=toRot(mScr);
+      const z={x:m.x+(crop.x-m.x)/f, y:m.y+(crop.y-m.y)/f, w:crop.w/f, h:crop.h/f};
+      if(z.w>=minCrop()&&z.h>=minCrop()) crop=clampRect(crop,z);
+      view=targetView();
+      render();
+    }
+    stage.addEventListener('wheel',e=>{
+      if(!work||busy||mode!=='crop') return;
+      e.preventDefault(); stopAnim();
+      zoomAt(Math.exp(-e.deltaY*0.0018), localPt(e));
+    },{passive:false});
+
+    /* ----- pointer interaction ----- */
+    function localPt(e){
+      const b=canvas.getBoundingClientRect();
+      return {x:e.clientX-b.left,y:e.clientY-b.top};
+    }
+    function zoneAt(sp){
+      const tl=toScreen({x:crop.x,y:crop.y}), br=toScreen({x:crop.x+crop.w,y:crop.y+crop.h});
+      const t=26;
+      const nx0=Math.abs(sp.x-tl.x)<=t, nx1=Math.abs(sp.x-br.x)<=t;
+      const ny0=Math.abs(sp.y-tl.y)<=t, ny1=Math.abs(sp.y-br.y)<=t;
+      const inX=sp.x>tl.x-t&&sp.x<br.x+t, inY=sp.y>tl.y-t&&sp.y<br.y+t;
+      if(nx0&&ny0) return 'nw'; if(nx1&&ny0) return 'ne';
+      if(nx1&&ny1) return 'se'; if(nx0&&ny1) return 'sw';
+      if(ny0&&inX) return 'n'; if(ny1&&inX) return 's';
+      if(nx0&&inY) return 'w'; if(nx1&&inY) return 'e';
+      if(sp.x>tl.x&&sp.x<br.x&&sp.y>tl.y&&sp.y<br.y) return 'pan';
+      return null;
+    }
+    function handleDrag(dg,sp){
+      const r0=dg.start, mn=minCrop(), k=dg.kind;
+      const p=toRot(sp);                 // view is frozen during a handle drag
+      let x0=r0.x,y0=r0.y,x1=r0.x+r0.w,y1=r0.y+r0.h;
+      if(ratio){
+        const west=k.includes('w'), north=k.includes('n');
+        if(k.length===2){                // corner: scale about the opposite corner
+          const ax=west?x1:x0, ay=north?y1:y0;
+          let w=Math.max(Math.abs(p.x-ax),Math.abs(p.y-ay)*ratio,mn,mn*ratio);
+          const h=w/ratio;
+          x0=west?ax-w:ax; x1=west?ax:ax+w;
+          y0=north?ay-h:ay; y1=north?ay:ay+h;
+        }else if(k==='e'||k==='w'){      // edge: scale about the opposite edge centre
+          const ax=k==='w'?x1:x0, cy=(y0+y1)/2;
+          const w=Math.max(Math.abs(p.x-ax),mn,mn*ratio), h=w/ratio;
+          x0=k==='w'?ax-w:ax; x1=k==='w'?ax:ax+w;
+          y0=cy-h/2; y1=cy+h/2;
+        }else{
+          const ay=k==='n'?y1:y0, cx=(x0+x1)/2;
+          const h=Math.max(Math.abs(p.y-ay),mn,mn/ratio), w=h*ratio;
+          y0=k==='n'?ay-h:ay; y1=k==='n'?ay:ay+h;
+          x0=cx-w/2; x1=cx+w/2;
+        }
+      }else{
+        if(k.includes('w')) x0=Math.min(p.x,x1-mn);
+        if(k.includes('e')) x1=Math.max(p.x,x0+mn);
+        if(k.includes('n')) y0=Math.min(p.y,y1-mn);
+        if(k.includes('s')) y1=Math.max(p.y,y0+mn);
+      }
+      crop=clampRect(crop,{x:x0,y:y0,w:x1-x0,h:y1-y0});
+      render();
+    }
+    canvas.addEventListener('pointerdown',e=>{
+      if(!work||busy) return;
+      e.preventDefault(); stopAnim();
+      try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+      pointers.set(e.pointerId,localPt(e));
+      if(mode==='markup'){
+        if(pointers.size>1){ shape=null; render(); return; }   // second finger cancels the stroke
+        const p=toRot(localPt(e));
+        shape={type:tool,color:color,width:strokeW(),pts: tool==='pen'?[p]:[p,p]};
+        render(); return;
+      }
+      if(pointers.size===2){ drag={kind:'pinch',prev:[...pointers.values()].map(p=>({...p}))}; return; }
+      const z=zoneAt(localPt(e));
+      if(z==='pan') drag={kind:'pan',prev:localPt(e)};
+      else if(z) drag={kind:z,start:{...crop}};
+      else drag=null;
+    });
+    canvas.addEventListener('pointermove',e=>{
+      if(!work) return;
+      const sp=localPt(e);
+      if(pointers.has(e.pointerId)) pointers.set(e.pointerId,sp);
+      if(mode==='markup'){
+        if(!shape) return;
+        const p=toRot(sp);
+        if(shape.type==='pen'){
+          const last=shape.pts[shape.pts.length-1];
+          if(Math.hypot(p.x-last.x,p.y-last.y)>1.5/view.s) shape.pts.push(p);
+        }else shape.pts[1]=p;
+        render(); return;
+      }
+      if(!drag){
+        const z=zoneAt(sp);
+        canvas.style.cursor=z==='pan'?'grab':(z?({n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',
+          nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize'})[z]:'default');
+        return;
+      }
+      if(drag.kind==='pinch'){
+        if(pointers.size<2) return;
+        const [a,b]=[...pointers.values()], pr=drag.prev;
+        const d0=Math.hypot(pr[0].x-pr[1].x,pr[0].y-pr[1].y)||1;
+        const d1=Math.hypot(a.x-b.x,a.y-b.y)||1;
+        const mNow={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+        const mPrev={x:(pr[0].x+pr[1].x)/2,y:(pr[0].y+pr[1].y)/2};
+        panBy({x:mNow.x-mPrev.x,y:mNow.y-mPrev.y});
+        zoomAt(d1/d0,mNow);
+        drag.prev=[{...a},{...b}];
+        return;
+      }
+      if(drag.kind==='pan'){
+        const d={x:sp.x-drag.prev.x,y:sp.y-drag.prev.y};
+        drag.prev=sp;
+        panBy(d);
+        return;
+      }
+      handleDrag(drag,sp);
+    });
+    function endPointer(e){
+      if(e) pointers.delete(e.pointerId);
+      if(!work) { drag=null; shape=null; return; }
+      if(mode==='markup'){
+        if(shape&&pointers.size===0) finishShape();
+        return;
+      }
+      if(!drag) return;
+      if(drag.kind==='pinch'){
+        if(pointers.size>=2) return;
+        drag=pointers.size===1?{kind:'pan',prev:[...pointers.values()][0]}:null;
+        if(!drag) animateView(160);
+        return;
+      }
+      if(pointers.size===0){
+        const wasHandle=drag.kind!=='pan';
+        drag=null;
+        animateView(wasHandle?200:120);   // iOS-style re-fit after the gesture
+      }
+    }
+    canvas.addEventListener('pointerup',endPointer);
+    canvas.addEventListener('pointercancel',endPointer);
+    // if pointer capture was unavailable, a release outside must still land
+    window.addEventListener('pointerup',endPointer);
+
+    /* ----- markup shapes (drawn in image coordinates) ----- */
+    function strokeW(){ return WIDTHS[widthKey]*Math.max(1,Math.max(work.width,work.height)/1400); }
     function drawShape(c,s){
       const p=s.pts, a=p[0], b=p[p.length-1];
       c.save();
@@ -987,7 +1306,9 @@ body{
       }
       c.restore();
     }
-
+    function normRect(a,b){
+      return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)};
+    }
     // Acrobat-style revision cloud: outward scallops walked clockwise around
     // the rectangle; overlapping sweeps (±0.5 rad) give the classic cusps.
     function cloudPath(c,r,lw){
@@ -1011,221 +1332,81 @@ body{
       }
       c.closePath();
     }
-
-    /* ----- view / render ----- */
-    function fitCanvas(){
-      if(!work) return;
-      const availW=Math.max(200,(wrap.clientWidth||overlayE.clientWidth||600)-4);
-      const availH=Math.max(200,Math.round(window.innerHeight*0.6));
-      const dims=angle ? inscribedRect(work.width,work.height,angle*Math.PI/180)
-                       : {w:work.width,h:work.height};
-      viewScale=Math.min(availW/dims.w, availH/dims.h);
-      dpr=Math.min(window.devicePixelRatio||1,2);
-      canvas.width=Math.max(1,Math.round(dims.w*viewScale*dpr));
-      canvas.height=Math.max(1,Math.round(dims.h*viewScale*dpr));
-      canvas.style.width=Math.round(dims.w*viewScale)+'px';
-      canvas.style.height=Math.round(dims.h*viewScale)+'px';
-    }
-    function handlePoints(r){
-      return [
-        ['nw',r.x,r.y],['n',r.x+r.w/2,r.y],['ne',r.x+r.w,r.y],
-        ['e',r.x+r.w,r.y+r.h/2],['se',r.x+r.w,r.y+r.h],
-        ['s',r.x+r.w/2,r.y+r.h],['sw',r.x,r.y+r.h],['w',r.x,r.y+r.h/2]
-      ];
-    }
-    function drawCropUI(){
-      const r=effCrop(), W=work.width, H=work.height;
-      dctx.save();
-      dctx.fillStyle='rgba(15,16,18,.5)';
-      dctx.fillRect(0,0,W,r.y);
-      dctx.fillRect(0,r.y+r.h,W,H-r.y-r.h);
-      dctx.fillRect(0,r.y,r.x,r.h);
-      dctx.fillRect(r.x+r.w,r.y,W-r.x-r.w,r.h);
-      dctx.strokeStyle='#fff'; dctx.lineWidth=2/viewScale;
-      dctx.strokeRect(r.x,r.y,r.w,r.h);
-      dctx.strokeStyle='rgba(255,255,255,.35)'; dctx.lineWidth=1/viewScale;
-      dctx.beginPath();
-      for(let i=1;i<3;i++){
-        dctx.moveTo(r.x+r.w*i/3,r.y); dctx.lineTo(r.x+r.w*i/3,r.y+r.h);
-        dctx.moveTo(r.x,r.y+r.h*i/3); dctx.lineTo(r.x+r.w,r.y+r.h*i/3);
-      }
-      dctx.stroke();
-      const hs=13/viewScale;
-      dctx.fillStyle='#fff'; dctx.strokeStyle='rgba(0,0,0,.35)'; dctx.lineWidth=1/viewScale;
-      for(const [,hx,hy] of handlePoints(r)){
-        dctx.fillRect(hx-hs/2,hy-hs/2,hs,hs);
-        dctx.strokeRect(hx-hs/2,hy-hs/2,hs,hs);
-      }
-      dctx.restore();
-    }
-    function drawStraightenGrid(w,h){
-      dctx.save();
-      dctx.strokeStyle='rgba(255,255,255,.45)'; dctx.lineWidth=1/viewScale;
-      dctx.beginPath();
-      for(let i=1;i<3;i++){
-        dctx.moveTo(w*i/3,0); dctx.lineTo(w*i/3,h);
-        dctx.moveTo(0,h*i/3); dctx.lineTo(w,h*i/3);
-      }
-      dctx.stroke();
-      dctx.restore();
-    }
-    function render(){
-      if(!work) return;
-      dctx.save();
-      dctx.setTransform(1,0,0,1,0,0);
-      dctx.clearRect(0,0,canvas.width,canvas.height);
-      dctx.restore();
-      dctx.setTransform(dpr*viewScale,0,0,dpr*viewScale,0,0);
-      if(angle){
-        const rad=angle*Math.PI/180, ins=inscribedRect(work.width,work.height,rad);
-        dctx.save();
-        dctx.translate(ins.w/2,ins.h/2); dctx.rotate(rad);
-        dctx.drawImage(work,-work.width/2,-work.height/2);
-        dctx.restore();
-        drawStraightenGrid(ins.w,ins.h);
-      }else{
-        dctx.drawImage(work,0,0);
-        if(mode==='adjust') drawCropUI();
-        if(shape) drawShape(dctx,shape);
-      }
-    }
-
-    /* ----- pointer interaction ----- */
-    function toWork(e){
-      const r=canvas.getBoundingClientRect();
-      return {x:(e.clientX-r.left)/viewScale, y:(e.clientY-r.top)/viewScale};
-    }
-    function zoneAt(p){
-      const r=effCrop(), t=16/viewScale;
-      for(const [k,hx,hy] of handlePoints(r)){
-        if(Math.abs(p.x-hx)<=t && Math.abs(p.y-hy)<=t) return k;
-      }
-      // inside an explicit selection drags it; with no selection yet (full
-      // frame) an inside drag starts a new crop rectangle instead
-      if(crop && p.x>r.x&&p.x<r.x+r.w&&p.y>r.y&&p.y<r.y+r.h) return 'move';
-      return 'new';
-    }
-    const CURSORS={move:'move',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',
-                   nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',new:'crosshair'};
-    function startCropDrag(p){
-      const kind=zoneAt(p), r=effCrop();
-      if(kind==='new'){ drag={kind:'new',anchor:p}; crop={x:p.x,y:p.y,w:1,h:1}; }
-      else if(kind==='move'){ drag={kind:'move',off:{x:p.x-r.x,y:p.y-r.y},w:r.w,h:r.h}; crop={...r}; }
-      else{ drag={kind:kind,orig:{...r}}; crop={...r}; }
-    }
-    function updateCropDrag(p){
-      const W=work.width,H=work.height;
-      const cx=Math.max(0,Math.min(W,p.x)), cy=Math.max(0,Math.min(H,p.y));
-      if(drag.kind==='new'){
-        crop=normRect(drag.anchor,{x:cx,y:cy});
-      }else if(drag.kind==='move'){
-        crop={x:Math.max(0,Math.min(W-drag.w,p.x-drag.off.x)),
-              y:Math.max(0,Math.min(H-drag.h,p.y-drag.off.y)),
-              w:drag.w,h:drag.h};
-      }else{
-        const o=drag.orig;
-        let l=o.x, tp=o.y, rt=o.x+o.w, bt=o.y+o.h;
-        if(drag.kind.includes('w')) l=Math.min(cx,rt-MIN_CROP);
-        if(drag.kind.includes('e')) rt=Math.max(cx,l+MIN_CROP);
-        if(drag.kind.includes('n')) tp=Math.min(cy,bt-MIN_CROP);
-        if(drag.kind.includes('s')) bt=Math.max(cy,tp+MIN_CROP);
-        crop={x:Math.max(0,l),y:Math.max(0,tp),
-              w:Math.min(W,rt)-Math.max(0,l),h:Math.min(H,bt)-Math.max(0,tp)};
-      }
-    }
     function finishShape(){
       if(!shape) return;
       const s=shape; shape=null;
       const a=s.pts[0], b=s.pts[s.pts.length-1];
       const tiny = s.type==='pen' ? s.pts.length<2
-                 : Math.hypot(b.x-a.x,b.y-a.y) < 4/viewScale;
-      if(!tiny){ pushUndo(); drawShape(wctx,s); }
+                 : Math.hypot(b.x-a.x,b.y-a.y) < 4/view.s;
+      if(!tiny){ pushUndoOf(work); drawShape(wctx,s); }
       render();
     }
 
-    canvas.addEventListener('pointerdown',e=>{
-      if(!work||busy||e.button===2) return;
-      if(activePtr!=null) return;                // one gesture at a time — ignore a second finger
-      activePtr=e.pointerId;
-      e.preventDefault();
-      try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
-      if(mode==='adjust'){
-        if(angle) commitAngle();       // baking resets the view; recompute the point after
-        startCropDrag(toWork(e));
-      }else{
-        const p=toWork(e);
-        shape={type:tool,color:color,width:strokeW(),pts: tool==='pen'?[p]:[p,p]};
-      }
-      render();
-    });
-    canvas.addEventListener('pointermove',e=>{
-      if(!work) return;
-      if(activePtr!=null && e.pointerId!==activePtr) return;
-      if(drag){ updateCropDrag(toWork(e)); render(); return; }
-      if(shape){
-        const p=toWork(e);
-        if(shape.type==='pen'){
-          const last=shape.pts[shape.pts.length-1];
-          if(Math.hypot(p.x-last.x,p.y-last.y)>1.5/viewScale) shape.pts.push(p);
-        }else shape.pts[1]=p;
-        render(); return;
-      }
-      if(mode==='adjust'&&!angle) canvas.style.cursor=CURSORS[zoneAt(toWork(e))];
-      else canvas.style.cursor=mode==='markup'?'crosshair':'default';
-    });
-    function endPointer(e){
-      if(e && activePtr!=null && e.pointerId!==activePtr) return;
-      activePtr=null;
-      if(!work) return;
-      if(drag){
-        drag=null;
-        // a stray tap or a selection that still covers the full frame is no
-        // selection at all — clearing it keeps interior drags starting fresh
-        if(crop&&(crop.w<MIN_CROP||crop.h<MIN_CROP||!cropIsReal())) crop=null;
-        render();
-      }
-      if(shape) finishShape();
+    /* ----- undo (blob snapshots) ----- */
+    function updateUndoBtn(){ undoBtn.disabled=!undoStack.length; }
+    function pushUndoOf(cv){
+      restoredPristine=false;
+      const p=new Promise(res=>cv.toBlob(res,'image/jpeg',0.92));
+      undoStack.push(p);
+      if(undoStack.length>UNDO_MAX){ undoStack.shift(); dirtyFloor=true; }
+      updateUndoBtn();
     }
-    canvas.addEventListener('pointerup',endPointer);
-    // if pointer capture was unavailable, a release outside the canvas must
-    // still end the gesture
-    window.addEventListener('pointerup',endPointer);
-    canvas.addEventListener('pointercancel',e=>{
-      if(activePtr!=null && e.pointerId!==activePtr) return;
-      activePtr=null; drag=null; shape=null; render();
-    });
+    async function doUndo(){
+      if(busy||!undoStack.length||!work) return;
+      const s=session;
+      busy=true; undoBtn.disabled=true;
+      try{
+        const blob=await undoStack.pop();
+        if(s!==session) return;
+        if(blob){
+          const url=URL.createObjectURL(blob);
+          try{
+            const img=await loadImage(url);
+            if(s!==session) return;
+            const c=document.createElement('canvas');
+            c.width=img.naturalWidth; c.height=img.naturalHeight;
+            c.getContext('2d').drawImage(img,0,0);
+            drag=null; shape=null; restoredPristine=false;
+            setWorkBitmap(c);
+            if(mode==='crop') beginCropSession();
+            sizeCanvas(); view=targetView(); drawDial();
+          }finally{ URL.revokeObjectURL(url); }
+        }
+      }catch(e){ console.error('editor undo',e); }
+      finally{ busy=false; updateUndoBtn(); render(); }
+    }
 
-    /* ----- toolbar wiring ----- */
-    function applyModeUI(m){
-      mode=m;
-      tabAdjust.classList.toggle('active',m==='adjust');
-      tabMarkup.classList.toggle('active',m==='markup');
-      tabAdjust.setAttribute('aria-selected',String(m==='adjust'));
-      tabMarkup.setAttribute('aria-selected',String(m==='markup'));
-      rowAdjust.hidden=m!=='adjust'; rowMarkup.hidden=m!=='markup';
-      canvas.style.cursor=m==='markup'?'crosshair':'default';
+    /* ----- mode switching ----- */
+    function applyModeUI(){
+      const cropM=mode==='crop';
+      modeCropBtn.classList.toggle('active',cropM);
+      modeMarkupBtn.classList.toggle('active',!cropM);
+      topCrop.hidden=!cropM; topMarkup.hidden=cropM;
+      aspectsRow.hidden=!cropM; dialWrap.hidden=!cropM;
+      toolsRow.hidden=cropM;
+      canvas.style.cursor=cropM?'default':'crosshair';
+      syncSessionUI();
     }
     function setMode(m){
       if(busy||!work||m===mode) return;
-      if(m==='markup'){ commitAngle(); commitCrop(); }   // markup is WYSIWYG on the final frame
-      applyModeUI(m);
-      fitCanvas(); render();
+      stopAnim(); drag=null; shape=null; pointers.clear();
+      if(m==='markup') commitCropSession();   // markup is WYSIWYG on the final frame
+      mode=m;
+      if(m==='crop') beginCropSession();
+      applyModeUI(); updateUndoBtn();
+      requestAnimationFrame(()=>{ sizeCanvas(); view=targetView(); render(); });
     }
-    tabAdjust.addEventListener('click',()=>setMode('adjust'));
-    tabMarkup.addEventListener('click',()=>setMode('markup'));
-    $('edRotL').addEventListener('click',()=>rotate90(false));
-    $('edRotR').addEventListener('click',()=>rotate90(true));
-    $('edFlipH').addEventListener('click',()=>flip(true));
-    $('edFlipV').addEventListener('click',()=>flip(false));
-    $('edCropReset').addEventListener('click',()=>{ if(busy) return; crop=null; render(); });
+    modeCropBtn.addEventListener('click',()=>setMode('crop'));
+    modeMarkupBtn.addEventListener('click',()=>setMode('markup'));
+    $('edRotate').addEventListener('click',rotate90);
+    $('edFlip').addEventListener('click',flipH);
+    resetBtn.addEventListener('click',resetSession);
     undoBtn.addEventListener('click',doUndo);
-    angleSlider.addEventListener('input',()=>{
-      if(busy||!work){ angleSlider.value=String(angle); return; }
-      angle=parseFloat(angleSlider.value)||0;
-      angleVal.textContent=(angle>0?'+':'')+String(+angle.toFixed(1))+'°';
-      fitCanvas(); render();
+    aspectsRow.querySelectorAll('.ed-chip').forEach(ch=>{
+      ch.setAttribute('role','radio');
+      ch.setAttribute('aria-checked',String(ch.classList.contains('active')));
+      ch.addEventListener('click',()=>applyRatio(ch.dataset.r));
     });
-
     overlayE.querySelectorAll('.edtool').forEach(b=>{
       b.addEventListener('click',()=>{
         overlayE.querySelectorAll('.edtool').forEach(x=>x.classList.remove('active'));
@@ -1241,14 +1422,14 @@ body{
     const swatchWrap=$('edSwatches');
     COLORS.forEach((c,i)=>{
       const b=document.createElement('button');
-      b.className='ed-swatch'+(i===0?' active':'');
+      b.className='ed-dot'+(i===0?' active':'');
       b.style.background=c;
       b.title=c;
       b.setAttribute('role','radio');
       b.setAttribute('aria-checked',String(i===0));
       b.setAttribute('aria-label','Colour '+c);
       b.addEventListener('click',()=>{
-        swatchWrap.querySelectorAll('.ed-swatch').forEach(x=>{
+        swatchWrap.querySelectorAll('.ed-dot').forEach(x=>{
           x.classList.remove('active'); x.setAttribute('aria-checked','false');
         });
         b.classList.add('active'); b.setAttribute('aria-checked','true'); color=c;
@@ -1261,18 +1442,19 @@ body{
       const s=++session;                 // invalidates any pending continuation
       try{
         const img=await loadImage(photoInst.getDisplaySrc());
-        if(s!==session) return;          // superseded by a newer open/close
+        if(s!==session) return;
         inst=photoInst;
-        undoStack=[]; angle=0; crop=null; drag=null; shape=null;
-        dirtyFloor=false; restoredPristine=false; activePtr=null;
-        angleSlider.value='0'; angleVal.textContent='0°';
-        setWork(canvasFrom(img));
-        updateUndoBtn();
-        applyModeUI('adjust');
+        undoStack=[]; dirtyFloor=false; restoredPristine=false;
+        drag=null; shape=null; dialDrag=null; pointers.clear(); stopAnim();
+        setWorkBitmap(canvasFrom(img));
+        mode='crop'; beginCropSession(); applyModeUI(); updateUndoBtn();
         overlayE.classList.add('show');
         lastFocus=document.activeElement;
-        try{ overlayE.querySelector('.modal').focus(); }catch(_){}
-        requestAnimationFrame(()=>{ if(s!==session) return; fitCanvas(); render(); });
+        try{ overlayE.focus(); }catch(_){}
+        requestAnimationFrame(()=>{
+          if(s!==session) return;
+          sizeCanvas(); view=targetView(); drawDial(); render();
+        });
       }catch(e){ console.error('editor open',e); ping('Could not open editor'); }
     }
     async function restoreOriginal(){
@@ -1282,19 +1464,22 @@ body{
       try{
         const img=await loadImage(target.getOriginalSrc());
         if(s!==session||!work) return;
-        pushUndo();
-        angle=0; angleSlider.value='0'; angleVal.textContent='0°'; crop=null;
-        setWork(canvasFrom(img));
-        restoredPristine=true;           // Apply can now revert the card for real
-        render();
+        if(mode==='crop') commitCropSession();
+        pushUndoOf(work);
+        setWorkBitmap(canvasFrom(img));
+        if(mode==='crop') beginCropSession();
+        restoredPristine=true;           // Apply now reverts the card for real
+        sizeCanvas(); view=targetView(); drawDial(); render();
       }catch(e){ console.error('editor restore',e); ping('Could not load original'); }
       finally{ busy=false; }
     }
     function close(){
       session++;
       overlayE.classList.remove('show');
-      inst=null; work=null; wctx=null; undoStack=[]; drag=null; shape=null;
-      dirtyFloor=false; restoredPristine=false; activePtr=null;
+      stopAnim();
+      inst=null; work=null; wctx=null; cropBase=null; undoStack=[];
+      drag=null; shape=null; dialDrag=null; pointers.clear();
+      dirtyFloor=false; restoredPristine=false; thetaDeg=0; crop=null;
       if(lastFocus && document.contains(lastFocus)){ try{ lastFocus.focus(); }catch(_){} }
       lastFocus=null;
     }
@@ -1307,32 +1492,39 @@ body{
       if(busy||!work||!inst) return;
       if(!isDirty()){ close(); return; }
       const s=session, target=inst;
-      // "Restore original" with nothing after it reverts the card to the real
-      // original instead of applying a re-encoded copy
-      if(restoredPristine && angle===0 && !cropIsReal()){
+      // "Revert" with nothing after it restores the card to the true original
+      if(restoredPristine && !sessionChanged()){
         busy=true; applyBtn.disabled=true;
         try{ await target.revertOriginal(); if(s===session) close(); }
         catch(e){ console.error('editor revert',e); ping('Could not restore original'); }
         finally{ busy=false; applyBtn.disabled=false; }
         return;
       }
-      busy=true; applyBtn.disabled=true; applyBtn.textContent='Applying…';
+      busy=true; applyBtn.disabled=true;
       try{
-        commitAngle(); commitCrop();
+        if(mode==='crop') commitCropSession();
         const blob=await new Promise(res=>work.toBlob(res,'image/jpeg',0.92));
         if(s!==session) return;          // closed mid-encode — treat as cancel
         if(blob) await target.applyEdit(blob);
         if(s===session) close();
       }catch(e){ console.error('editor apply',e); ping('Could not apply edits'); }
-      finally{ busy=false; applyBtn.disabled=false; applyBtn.innerHTML='✓ Apply'; }
+      finally{ busy=false; applyBtn.disabled=false; }
     }
-    $('edApply').addEventListener('click',apply);
+    applyBtn.addEventListener('click',apply);
     $('edCancel').addEventListener('click',requestClose);
-    $('editorCloseBtn').addEventListener('click',requestClose);
     $('edOriginal').addEventListener('click',restoreOriginal);
 
-    function refit(){ if(work){ fitCanvas(); render(); } }
+    function refit(){
+      if(!work) return;
+      sizeCanvas(); view=targetView(); drawDial(); render();
+    }
     function isOpen(){ return !!work; }
+
+    // minimal state hook for automated tests
+    window.__geotagEditor={ state:()=>work?{
+      mode,thetaDeg,crop:{...crop},workW:work.width,workH:work.height,
+      view:{...view},dirty:isDirty()}:null };
+
     return {open,cancel:requestClose,refit,isOpen};
   })();
 
