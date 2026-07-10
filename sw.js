@@ -2,7 +2,7 @@
    Bump CACHE_VERSION whenever any precached asset changes. */
 "use strict";
 
-const CACHE_VERSION = "geotag-v6";
+const CACHE_VERSION = "geotag-v7";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const TILE_CACHE = CACHE_VERSION + "-tiles";
 const TILE_MAX = 300; // cap stored map tiles
@@ -57,7 +57,11 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((k) => k !== SHELL_CACHE && k !== TILE_CACHE).map((k) => caches.delete(k))
+        keys
+          // only touch our own versioned caches — other apps on this origin
+          // (or future GeoTag features) must not lose their storage
+          .filter((k) => k.startsWith("geotag-") && k !== SHELL_CACHE && k !== TILE_CACHE)
+          .map((k) => caches.delete(k))
       )
     ).then(() => self.clients.claim())
   );
@@ -105,8 +109,40 @@ self.addEventListener("fetch", (event) => {
   // (the app already degrades gracefully when this is unavailable).
   if (url.origin !== self.location.origin) return;
 
-  // Same-origin app shell: cache-first, fall back to network, and for
-  // navigations fall back to the cached index when offline.
+  // Navigations: network-first so a new index.html reaches installed users
+  // even when sw.js itself didn't change (the v2→multi-photo trap). The cached
+  // shell covers offline, HTTP errors (mid-deploy 404/503) and slow links — a
+  // short race keeps launch snappy on 1-bar connections.
+  if (req.mode === "navigate") {
+    event.respondWith((async () => {
+      let netRes = null;
+      const network = fetch(req).then((res) => {
+        netRes = res;
+        if (res && res.ok) {
+          const copy = res.clone();
+          // one normalized key — query-string variants must not pile up copies
+          caches.open(SHELL_CACHE).then((c) => c.put("index.html", copy)).catch(() => {});
+          return res;
+        }
+        return null; // error page → prefer the cached shell
+      }).catch(() => null);
+
+      const winner = await Promise.race([
+        network,
+        new Promise((r) => setTimeout(() => r("timeout"), 3500))
+      ]);
+      if (winner && winner !== "timeout") return winner;
+
+      // "index.html" first: it is the entry the network path keeps fresh
+      const cached = (await caches.match("index.html")) || (await caches.match(req));
+      if (cached) return cached;
+      return (await network) || netRes || Response.error();
+    })());
+    return;
+  }
+
+  // Same-origin app shell (scripts, styles, fonts, icons): cache-first with a
+  // network fallback; versioned by CACHE_VERSION bumps.
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;

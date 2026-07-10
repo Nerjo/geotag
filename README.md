@@ -7,6 +7,10 @@ and exports a side-by-side **photo + map report image** for inspection reports.
 - 📍 Drop a JPG / PNG / HEIC photo → see latitude/longitude (decimal & DMS),
   altitude, heading, capture time, and camera.
 - 🗺️ Interactive Leaflet map with Street / Satellite / Topo styles.
+- ✏️ Per-photo **Edit** button — crop, rotate 90° left/right, flip, straighten
+  with a fine-rotation slider, and Acrobat-style markup (pen, line, arrow, box,
+  ellipse, revision cloud). Edits only affect the report picture; the original
+  file and its GPS metadata are untouched.
 - 🧾 One-click "Build report image" — composited photo + map with a coordinate
   caption, ready to copy, download, or share.
 - 🔒 **100% local.** Photos are read in the browser and never uploaded.
@@ -53,4 +57,6 @@ icons/                  App icons (192 / 512 / maskable / apple-touch / favicon)
 ## Updating
 
 Bump `CACHE_VERSION` in `sw.js` whenever any precached asset changes so clients
-pick up the new version.
+pick up the new version. Navigations are network-first, so a changed
+`index.html` reaches installed users even without a version bump, and an
+"Update ready" banner offers a reload when a new service worker takes over.

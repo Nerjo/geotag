@@ -264,7 +264,7 @@ body{
   transform:translateX(-50%) translateY(12px);
   background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;
   font-family:'IBM Plex Mono',monospace;font-size:.78rem;letter-spacing:.04em;
-  opacity:0;pointer-events:none;transition:.3s;z-index:10000;
+  opacity:0;pointer-events:none;transition:.3s;z-index:10002; /* above the update bar */
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -328,6 +328,76 @@ body{
 .card .card-status{margin-top:12px}
 .card-actions{margin-top:14px;display:flex;justify-content:flex-end;gap:10px}
 .canvas-row.solo{grid-template-columns:1fr}
+
+/* ---------- per-photo edit button ---------- */
+.pane-btn{
+  border:1px solid var(--line-strong);background:#fff;border-radius:7px;
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-soft);padding:4px 9px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;transition:.15s;
+}
+.pane-btn:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pane-btn:disabled{opacity:.4;cursor:not-allowed}
+.pane-head .headright{display:flex;align-items:center;gap:8px;min-width:0}
+.pane-head .headright .dimReadout{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- photo editor ---------- */
+.editor-modal{max-width:min(1100px,96vw);width:100%}
+.ed-tabs{display:inline-flex;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden}
+.ed-tabs button{
+  font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;
+  padding:8px 14px;border:none;background:var(--card);color:var(--ink-soft);cursor:pointer;
+  border-right:1.5px solid var(--ink);
+}
+.ed-tabs button:last-child{border-right:none}
+.ed-tabs button.active{background:var(--accent);color:#fff}
+.ed-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.ed-row[hidden]{display:none}
+.ed-btn{
+  border:1.5px solid var(--line-strong);background:#fff;border-radius:9px;padding:8px 11px;cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.04em;color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px;transition:.15s;
+}
+.ed-btn:hover{border-color:var(--ink)}
+.ed-btn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.ed-btn:disabled{opacity:.35;cursor:not-allowed}
+.ed-sep{width:1px;align-self:stretch;background:var(--line-strong);margin:0 4px}
+.ed-slider{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--ink-soft);
+}
+.ed-slider input[type=range]{width:170px;accent-color:var(--accent)}
+.ed-angle{min-width:48px;text-align:right;color:var(--ink)}
+.ed-swatches{display:inline-flex;align-items:center;gap:7px}
+.ed-swatch{
+  width:24px;height:24px;border-radius:50%;border:2px solid #fff;
+  box-shadow:0 0 0 1.5px var(--line-strong);cursor:pointer;padding:0;
+}
+.ed-swatch.active{box-shadow:0 0 0 2.5px var(--ink)}
+.ed-canvas-wrap{
+  background:#26282d;border:1.5px solid var(--ink);border-radius:10px;
+  display:flex;justify-content:center;align-items:center;overflow:hidden;
+  min-height:120px;
+}
+#editorCanvas{display:block;max-width:100%;touch-action:none}
+.editor-modal .modal-actions{align-items:center}
+.editor-modal .modal-actions .spacer{flex:1}
+
+/* ---------- update banner ---------- */
+.update-bar{
+  position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;
+  display:none;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
+  font-family:'IBM Plex Mono',monospace;font-size:.78rem;letter-spacing:.02em;
+  z-index:10001;box-shadow:0 12px 30px -12px rgba(0,0,0,.6);
+  max-width:calc(100vw - 24px);text-align:center;
+}
+.update-bar.show{display:flex}
+.update-bar button{
+  border:1px solid #fff;background:transparent;color:#fff;border-radius:8px;
+  padding:6px 12px;cursor:pointer;font-family:inherit;font-size:.75rem;letter-spacing:.06em;
+}
+.update-bar button:hover{background:#fff;color:var(--ink)}
 
 /* ---------- responsive / phone ---------- */
 @media (max-width:760px){
@@ -421,6 +491,60 @@ body{
       <button class="btn accent" id="downloadImgBtn">↓ Download PNG</button>
     </div>
   </div>
+</div>
+
+<div class="overlay" id="editorOverlay">
+  <div class="modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editorTitle" tabindex="-1">
+    <button class="modal-close" id="editorCloseBtn" aria-label="Close editor">&times;</button>
+    <h3 id="editorTitle">Edit photo</h3>
+    <div class="hint">Crop, rotate &amp; straighten under Adjust · draw callouts under Markup. Edits only change the report picture — the original file and its GPS data are untouched.</div>
+    <div class="ed-row">
+      <div class="ed-tabs" role="tablist" aria-label="Editor mode">
+        <button id="edTabAdjust" class="active" role="tab" aria-selected="true" aria-controls="edAdjustRow">Adjust</button>
+        <button id="edTabMarkup" role="tab" aria-selected="false" aria-controls="edMarkupRow">Markup</button>
+      </div>
+      <button class="ed-btn" id="edUndo" disabled style="margin-left:auto" title="Undo last change">↩ Undo</button>
+    </div>
+    <div class="ed-row" id="edAdjustRow">
+      <button class="ed-btn" id="edRotL" title="Rotate 90° left">⟲ 90°</button>
+      <button class="ed-btn" id="edRotR" title="Rotate 90° right">⟳ 90°</button>
+      <button class="ed-btn" id="edFlipH" title="Flip horizontally">⇋ Flip H</button>
+      <button class="ed-btn" id="edFlipV" title="Flip vertically">⇵ Flip V</button>
+      <span class="ed-sep" aria-hidden="true"></span>
+      <label class="ed-slider">Straighten
+        <input type="range" id="edAngle" min="-45" max="45" step="0.5" value="0" aria-label="Fine rotation angle in degrees">
+        <span class="ed-angle" id="edAngleVal">0°</span>
+      </label>
+      <span class="ed-sep" aria-hidden="true"></span>
+      <button class="ed-btn" id="edCropReset" title="Reset the crop selection to the full frame">▣ Full frame</button>
+    </div>
+    <div class="ed-row" id="edMarkupRow" hidden>
+      <button class="ed-btn edtool active" data-tool="pen" title="Freehand pen">✎ Pen</button>
+      <button class="ed-btn edtool" data-tool="line" title="Straight line">╱ Line</button>
+      <button class="ed-btn edtool" data-tool="arrow" title="Arrow">➔ Arrow</button>
+      <button class="ed-btn edtool" data-tool="box" title="Rectangle">▭ Box</button>
+      <button class="ed-btn edtool" data-tool="ellipse" title="Ellipse">◯ Ellipse</button>
+      <button class="ed-btn edtool" data-tool="cloud" title="Revision cloud">☁ Cloud</button>
+      <span class="ed-sep" aria-hidden="true"></span>
+      <span class="ed-swatches" id="edSwatches" role="radiogroup" aria-label="Markup colour"></span>
+      <span class="ed-sep" aria-hidden="true"></span>
+      <button class="ed-btn edwidth" data-w="s" title="Thin stroke">Thin</button>
+      <button class="ed-btn edwidth active" data-w="m" title="Medium stroke">Med</button>
+      <button class="ed-btn edwidth" data-w="l" title="Thick stroke">Thick</button>
+    </div>
+    <div class="ed-canvas-wrap"><canvas id="editorCanvas"></canvas></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="edOriginal" title="Discard every edit and reload the original photo">↺ Restore original</button>
+      <span class="spacer"></span>
+      <button class="btn" id="edCancel">Cancel</button>
+      <button class="btn accent" id="edApply">✓ Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="update-bar" id="updateBar" role="status">
+  <span>Update ready — reload for the new version</span>
+  <button id="updateReload">Reload</button>
 </div>
 
 <script src="vendor/exifr/full.umd.js"></script>
@@ -599,6 +723,13 @@ body{
     return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       {maxZoom:19,crossOrigin:true,attribution:'© OpenStreetMap contributors'});
   }
+  // Attribution string baked into exported report images (tile-provider terms
+  // require visible credit on published maps, including PNG exports).
+  function attributionFor(type){
+    if(type==='satellite') return '© Esri · Maxar · Earthstar Geographics';
+    if(type==='topo') return '© OpenTopoMap (CC-BY-SA) · © OpenStreetMap contributors';
+    return '© OpenStreetMap contributors';
+  }
 
   /* ---------- HEIC ---------- */
   async function toDisplayable(file,onStatus){
@@ -618,7 +749,12 @@ body{
 
   /* ---------- shared export modal ---------- */
   let currentBlob=null, currentName='geotag.png';
+  // buildExport draws onto the one shared #exportCanvas, so only a single
+  // export (button or Word batch) may run at a time.
+  let exportBusy=false;
   async function openExport(photo,btn,withCaption=true){
+    if(exportBusy){ ping('Another export is still running'); return; }
+    exportBusy=true;
     btn=btn||photo.buildBtn;
     const label=btn.innerHTML;
     btn.disabled=true; btn.innerHTML='Rendering…';
@@ -633,8 +769,558 @@ body{
       shareBtn.hidden = !(navigator.canShare && navigator.canShare({files:[new File([blob],currentName,{type:'image/png'})]}));
       overlay.classList.add('show');
     }catch(e){ console.error('export',e); ping('Could not build report'); }
-    finally{ btn.disabled=false; btn.innerHTML=label; }
+    finally{ exportBusy=false; btn.disabled=false; btn.innerHTML=label; }
   }
+
+  /* ---------- photo editor: crop / rotate / straighten / flip / markup ----------
+     One shared modal. Edits work on an offscreen "work" canvas (longest edge
+     capped so undo snapshots stay affordable); every committed operation bakes
+     into the bitmap after pushing a JPEG snapshot onto the undo stack. Applying
+     hands the card a new blob — the original file (and its EXIF/GPS) is never
+     touched, so coordinates and filenames are unaffected. */
+  const editor=(function(){
+    const overlayE=$('editorOverlay'), canvas=$('editorCanvas'), dctx=canvas.getContext('2d');
+    const wrap=canvas.parentElement;
+    const tabAdjust=$('edTabAdjust'), tabMarkup=$('edTabMarkup');
+    const rowAdjust=$('edAdjustRow'), rowMarkup=$('edMarkupRow');
+    const angleSlider=$('edAngle'), angleVal=$('edAngleVal');
+    const undoBtn=$('edUndo'), applyBtn=$('edApply');
+
+    const MAX_EDGE=2600, UNDO_MAX=15, MIN_CROP=24;
+    const COLORS=['#e02121','#ef5d12','#f7b500','#16a34a','#2563eb','#17191c','#ffffff'];
+    const WIDTHS={s:3,m:6,l:11};
+
+    let inst=null, work=null, wctx=null;
+    let mode='adjust', tool='pen', color=COLORS[0], widthKey='m';
+    let angle=0;          // uncommitted straighten angle (deg)
+    let crop=null;        // uncommitted crop rect in work px; null = full frame
+    let drag=null, shape=null;
+    let undoStack=[];     // Promise<Blob> snapshots, oldest first
+    let viewScale=1, dpr=1;
+    // Async safety: `session` invalidates continuations from a closed/reopened
+    // editor (each await re-checks it); `busy` serializes bitmap mutations so
+    // e.g. a rotate can't interleave with an undo that is still decoding.
+    let session=0, busy=false;
+    let dirtyFloor=false;        // snapshots were dropped by the undo cap — edits remain baked
+    let restoredPristine=false;  // work bitmap is exactly the untouched original
+    let activePtr=null;          // pointerId of the active gesture (ignore other fingers)
+    let lastFocus=null;
+
+    function loadImage(src){
+      return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
+    }
+    function canvasFrom(img,maxEdge){
+      const sc=Math.min(1,(maxEdge||MAX_EDGE)/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+      const c=document.createElement('canvas');
+      c.width=Math.max(1,Math.round((img.naturalWidth||img.width)*sc));
+      c.height=Math.max(1,Math.round((img.naturalHeight||img.height)*sc));
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      return c;
+    }
+    function setWork(c){ work=c; wctx=c.getContext('2d'); fitCanvas(); }
+    function effCrop(){ return crop||{x:0,y:0,w:work.width,h:work.height}; }
+    function cropIsReal(){
+      if(!crop) return false;
+      const r=effCrop();
+      return Math.round(r.x)>0||Math.round(r.y)>0||
+             Math.round(r.x+r.w)<work.width||Math.round(r.y+r.h)<work.height;
+    }
+    function strokeW(){ return WIDTHS[widthKey]*Math.max(1,Math.max(work.width,work.height)/1400); }
+    function normRect(a,b){
+      return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)};
+    }
+
+    // Largest axis-aligned rectangle inscribed in a w×h rect rotated by rad
+    // (standard "rotatedRectWithMaxArea"); |rad| <= 45° here.
+    function inscribedRect(w,h,rad){
+      const a=Math.abs(rad);
+      if(!w||!h||!a) return {w:w,h:h};
+      const sin=Math.sin(a),cos=Math.cos(a);
+      const shortS=Math.min(w,h);
+      let rw,rh;
+      if(shortS<=2*sin*cos*Math.max(w,h) || Math.abs(sin-cos)<1e-9){
+        const x=0.5*shortS;
+        if(w>=h){ rw=x/sin; rh=x/cos; } else { rw=x/cos; rh=x/sin; }
+      }else{
+        const cos2=cos*cos-sin*sin;
+        rw=(w*cos-h*sin)/cos2; rh=(h*cos-w*sin)/cos2;
+      }
+      return {w:Math.max(1,rw),h:Math.max(1,rh)};
+    }
+
+    /* ----- undo ----- */
+    function updateUndoBtn(){ undoBtn.disabled=!undoStack.length; }
+    function isDirty(){ return undoStack.length>0||dirtyFloor||angle!==0||cropIsReal(); }
+    function pushUndo(){
+      restoredPristine=false;
+      const p=new Promise(res=>work.toBlob(res,'image/jpeg',0.92));
+      undoStack.push(p);
+      if(undoStack.length>UNDO_MAX){ undoStack.shift(); dirtyFloor=true; }
+      updateUndoBtn();
+    }
+    async function doUndo(){
+      if(busy||!undoStack.length||!work) return;
+      const s=session;
+      busy=true; undoBtn.disabled=true;
+      try{
+        const blob=await undoStack.pop();
+        if(s!==session) return;                    // editor closed / reopened meanwhile
+        if(blob){
+          const url=URL.createObjectURL(blob);
+          try{
+            const img=await loadImage(url);
+            if(s!==session) return;
+            const c=document.createElement('canvas');
+            c.width=img.naturalWidth; c.height=img.naturalHeight;
+            c.getContext('2d').drawImage(img,0,0);
+            angle=0; angleSlider.value='0'; angleVal.textContent='0°';
+            crop=null; drag=null; shape=null; restoredPristine=false;
+            setWork(c);
+          }finally{ URL.revokeObjectURL(url); }
+        }
+      }catch(e){ console.error('editor undo',e); }
+      finally{ busy=false; updateUndoBtn(); render(); }
+    }
+
+    /* ----- geometry commits (each bakes into the work bitmap) ----- */
+    function commitAngle(){
+      if(!angle) return;
+      const rad=angle*Math.PI/180, ins=inscribedRect(work.width,work.height,rad);
+      pushUndo();
+      const c=document.createElement('canvas');
+      c.width=Math.max(1,Math.round(ins.w)); c.height=Math.max(1,Math.round(ins.h));
+      const x=c.getContext('2d');
+      x.translate(c.width/2,c.height/2); x.rotate(rad);
+      x.drawImage(work,-work.width/2,-work.height/2);
+      angle=0; angleSlider.value='0'; angleVal.textContent='0°'; crop=null;
+      setWork(c);
+    }
+    function commitCrop(){
+      if(!cropIsReal()){ crop=null; return; }
+      const r=effCrop();
+      const sx=Math.round(r.x), sy=Math.round(r.y),
+            sw=Math.max(1,Math.round(r.w)), sh=Math.max(1,Math.round(r.h));
+      pushUndo();
+      const c=document.createElement('canvas');
+      c.width=sw; c.height=sh;
+      c.getContext('2d').drawImage(work,sx,sy,sw,sh,0,0,sw,sh);
+      crop=null;
+      setWork(c);
+    }
+    function rotate90(cw){
+      if(busy||!work) return;
+      commitAngle();
+      pushUndo();
+      const c=document.createElement('canvas');
+      c.width=work.height; c.height=work.width;
+      const x=c.getContext('2d');
+      if(cw){ x.translate(c.width,0); x.rotate(Math.PI/2); }
+      else{ x.translate(0,c.height); x.rotate(-Math.PI/2); }
+      x.drawImage(work,0,0);
+      if(crop){
+        crop = cw
+          ? {x:work.height-crop.y-crop.h, y:crop.x, w:crop.h, h:crop.w}
+          : {x:crop.y, y:work.width-crop.x-crop.w, w:crop.h, h:crop.w};
+      }
+      setWork(c); render();
+    }
+    function flip(horiz){
+      if(busy||!work) return;
+      commitAngle();
+      pushUndo();
+      const c=document.createElement('canvas');
+      c.width=work.width; c.height=work.height;
+      const x=c.getContext('2d');
+      if(horiz){ x.translate(c.width,0); x.scale(-1,1); }
+      else{ x.translate(0,c.height); x.scale(1,-1); }
+      x.drawImage(work,0,0);
+      if(crop){
+        if(horiz) crop={x:work.width-crop.x-crop.w,y:crop.y,w:crop.w,h:crop.h};
+        else crop={x:crop.x,y:work.height-crop.y-crop.h,w:crop.w,h:crop.h};
+      }
+      setWork(c); render();
+    }
+
+    /* ----- markup shapes ----- */
+    function drawShape(c,s){
+      const p=s.pts, a=p[0], b=p[p.length-1];
+      c.save();
+      c.strokeStyle=s.color; c.fillStyle=s.color;
+      c.lineWidth=s.width; c.lineJoin='round'; c.lineCap='round';
+      if(s.type==='pen'){
+        c.beginPath(); c.moveTo(a.x,a.y);
+        for(let i=1;i<p.length;i++) c.lineTo(p[i].x,p[i].y);
+        c.stroke();
+      }else if(s.type==='line'){
+        c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke();
+      }else if(s.type==='arrow'){
+        const ang=Math.atan2(b.y-a.y,b.x-a.x), head=Math.max(s.width*3.4,14);
+        c.beginPath(); c.moveTo(a.x,a.y);
+        c.lineTo(b.x-head*0.6*Math.cos(ang), b.y-head*0.6*Math.sin(ang));
+        c.stroke();
+        c.beginPath();
+        c.moveTo(b.x,b.y);
+        c.lineTo(b.x-head*Math.cos(ang-0.42), b.y-head*Math.sin(ang-0.42));
+        c.lineTo(b.x-head*Math.cos(ang+0.42), b.y-head*Math.sin(ang+0.42));
+        c.closePath(); c.fill();
+      }else if(s.type==='box'){
+        const r=normRect(a,b); c.strokeRect(r.x,r.y,r.w,r.h);
+      }else if(s.type==='ellipse'){
+        const r=normRect(a,b);
+        c.beginPath(); c.ellipse(r.x+r.w/2,r.y+r.h/2,Math.max(1,r.w/2),Math.max(1,r.h/2),0,0,Math.PI*2); c.stroke();
+      }else if(s.type==='cloud'){
+        cloudPath(c,normRect(a,b),s.width); c.stroke();
+      }
+      c.restore();
+    }
+
+    // Acrobat-style revision cloud: outward scallops walked clockwise around
+    // the rectangle; overlapping sweeps (±0.5 rad) give the classic cusps.
+    function cloudPath(c,r,lw){
+      const seg=Math.max(14, Math.min(Math.min(r.w,r.h)/2.5, Math.max(r.w,r.h)/6), lw*2.2);
+      const pts=[];
+      const walk=(x0,y0,x1,y1)=>{
+        const len=Math.hypot(x1-x0,y1-y0), n=Math.max(1,Math.round(len/seg));
+        for(let i=0;i<n;i++) pts.push({x:x0+(x1-x0)*i/n, y:y0+(y1-y0)*i/n});
+      };
+      walk(r.x,r.y, r.x+r.w,r.y);
+      walk(r.x+r.w,r.y, r.x+r.w,r.y+r.h);
+      walk(r.x+r.w,r.y+r.h, r.x,r.y+r.h);
+      walk(r.x,r.y+r.h, r.x,r.y);
+      if(pts.length<3) return;
+      c.beginPath();
+      for(let i=0;i<pts.length;i++){
+        const a=pts[i], b=pts[(i+1)%pts.length];
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        const ang=Math.atan2(b.y-a.y,b.x-a.x), rad=Math.hypot(b.x-a.x,b.y-a.y)/2;
+        c.arc(mx,my,rad, ang+Math.PI-0.5, ang+0.5, false);
+      }
+      c.closePath();
+    }
+
+    /* ----- view / render ----- */
+    function fitCanvas(){
+      if(!work) return;
+      const availW=Math.max(200,(wrap.clientWidth||overlayE.clientWidth||600)-4);
+      const availH=Math.max(200,Math.round(window.innerHeight*0.6));
+      const dims=angle ? inscribedRect(work.width,work.height,angle*Math.PI/180)
+                       : {w:work.width,h:work.height};
+      viewScale=Math.min(availW/dims.w, availH/dims.h);
+      dpr=Math.min(window.devicePixelRatio||1,2);
+      canvas.width=Math.max(1,Math.round(dims.w*viewScale*dpr));
+      canvas.height=Math.max(1,Math.round(dims.h*viewScale*dpr));
+      canvas.style.width=Math.round(dims.w*viewScale)+'px';
+      canvas.style.height=Math.round(dims.h*viewScale)+'px';
+    }
+    function handlePoints(r){
+      return [
+        ['nw',r.x,r.y],['n',r.x+r.w/2,r.y],['ne',r.x+r.w,r.y],
+        ['e',r.x+r.w,r.y+r.h/2],['se',r.x+r.w,r.y+r.h],
+        ['s',r.x+r.w/2,r.y+r.h],['sw',r.x,r.y+r.h],['w',r.x,r.y+r.h/2]
+      ];
+    }
+    function drawCropUI(){
+      const r=effCrop(), W=work.width, H=work.height;
+      dctx.save();
+      dctx.fillStyle='rgba(15,16,18,.5)';
+      dctx.fillRect(0,0,W,r.y);
+      dctx.fillRect(0,r.y+r.h,W,H-r.y-r.h);
+      dctx.fillRect(0,r.y,r.x,r.h);
+      dctx.fillRect(r.x+r.w,r.y,W-r.x-r.w,r.h);
+      dctx.strokeStyle='#fff'; dctx.lineWidth=2/viewScale;
+      dctx.strokeRect(r.x,r.y,r.w,r.h);
+      dctx.strokeStyle='rgba(255,255,255,.35)'; dctx.lineWidth=1/viewScale;
+      dctx.beginPath();
+      for(let i=1;i<3;i++){
+        dctx.moveTo(r.x+r.w*i/3,r.y); dctx.lineTo(r.x+r.w*i/3,r.y+r.h);
+        dctx.moveTo(r.x,r.y+r.h*i/3); dctx.lineTo(r.x+r.w,r.y+r.h*i/3);
+      }
+      dctx.stroke();
+      const hs=13/viewScale;
+      dctx.fillStyle='#fff'; dctx.strokeStyle='rgba(0,0,0,.35)'; dctx.lineWidth=1/viewScale;
+      for(const [,hx,hy] of handlePoints(r)){
+        dctx.fillRect(hx-hs/2,hy-hs/2,hs,hs);
+        dctx.strokeRect(hx-hs/2,hy-hs/2,hs,hs);
+      }
+      dctx.restore();
+    }
+    function drawStraightenGrid(w,h){
+      dctx.save();
+      dctx.strokeStyle='rgba(255,255,255,.45)'; dctx.lineWidth=1/viewScale;
+      dctx.beginPath();
+      for(let i=1;i<3;i++){
+        dctx.moveTo(w*i/3,0); dctx.lineTo(w*i/3,h);
+        dctx.moveTo(0,h*i/3); dctx.lineTo(w,h*i/3);
+      }
+      dctx.stroke();
+      dctx.restore();
+    }
+    function render(){
+      if(!work) return;
+      dctx.save();
+      dctx.setTransform(1,0,0,1,0,0);
+      dctx.clearRect(0,0,canvas.width,canvas.height);
+      dctx.restore();
+      dctx.setTransform(dpr*viewScale,0,0,dpr*viewScale,0,0);
+      if(angle){
+        const rad=angle*Math.PI/180, ins=inscribedRect(work.width,work.height,rad);
+        dctx.save();
+        dctx.translate(ins.w/2,ins.h/2); dctx.rotate(rad);
+        dctx.drawImage(work,-work.width/2,-work.height/2);
+        dctx.restore();
+        drawStraightenGrid(ins.w,ins.h);
+      }else{
+        dctx.drawImage(work,0,0);
+        if(mode==='adjust') drawCropUI();
+        if(shape) drawShape(dctx,shape);
+      }
+    }
+
+    /* ----- pointer interaction ----- */
+    function toWork(e){
+      const r=canvas.getBoundingClientRect();
+      return {x:(e.clientX-r.left)/viewScale, y:(e.clientY-r.top)/viewScale};
+    }
+    function zoneAt(p){
+      const r=effCrop(), t=16/viewScale;
+      for(const [k,hx,hy] of handlePoints(r)){
+        if(Math.abs(p.x-hx)<=t && Math.abs(p.y-hy)<=t) return k;
+      }
+      // inside an explicit selection drags it; with no selection yet (full
+      // frame) an inside drag starts a new crop rectangle instead
+      if(crop && p.x>r.x&&p.x<r.x+r.w&&p.y>r.y&&p.y<r.y+r.h) return 'move';
+      return 'new';
+    }
+    const CURSORS={move:'move',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',
+                   nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',new:'crosshair'};
+    function startCropDrag(p){
+      const kind=zoneAt(p), r=effCrop();
+      if(kind==='new'){ drag={kind:'new',anchor:p}; crop={x:p.x,y:p.y,w:1,h:1}; }
+      else if(kind==='move'){ drag={kind:'move',off:{x:p.x-r.x,y:p.y-r.y},w:r.w,h:r.h}; crop={...r}; }
+      else{ drag={kind:kind,orig:{...r}}; crop={...r}; }
+    }
+    function updateCropDrag(p){
+      const W=work.width,H=work.height;
+      const cx=Math.max(0,Math.min(W,p.x)), cy=Math.max(0,Math.min(H,p.y));
+      if(drag.kind==='new'){
+        crop=normRect(drag.anchor,{x:cx,y:cy});
+      }else if(drag.kind==='move'){
+        crop={x:Math.max(0,Math.min(W-drag.w,p.x-drag.off.x)),
+              y:Math.max(0,Math.min(H-drag.h,p.y-drag.off.y)),
+              w:drag.w,h:drag.h};
+      }else{
+        const o=drag.orig;
+        let l=o.x, tp=o.y, rt=o.x+o.w, bt=o.y+o.h;
+        if(drag.kind.includes('w')) l=Math.min(cx,rt-MIN_CROP);
+        if(drag.kind.includes('e')) rt=Math.max(cx,l+MIN_CROP);
+        if(drag.kind.includes('n')) tp=Math.min(cy,bt-MIN_CROP);
+        if(drag.kind.includes('s')) bt=Math.max(cy,tp+MIN_CROP);
+        crop={x:Math.max(0,l),y:Math.max(0,tp),
+              w:Math.min(W,rt)-Math.max(0,l),h:Math.min(H,bt)-Math.max(0,tp)};
+      }
+    }
+    function finishShape(){
+      if(!shape) return;
+      const s=shape; shape=null;
+      const a=s.pts[0], b=s.pts[s.pts.length-1];
+      const tiny = s.type==='pen' ? s.pts.length<2
+                 : Math.hypot(b.x-a.x,b.y-a.y) < 4/viewScale;
+      if(!tiny){ pushUndo(); drawShape(wctx,s); }
+      render();
+    }
+
+    canvas.addEventListener('pointerdown',e=>{
+      if(!work||busy||e.button===2) return;
+      if(activePtr!=null) return;                // one gesture at a time — ignore a second finger
+      activePtr=e.pointerId;
+      e.preventDefault();
+      try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+      if(mode==='adjust'){
+        if(angle) commitAngle();       // baking resets the view; recompute the point after
+        startCropDrag(toWork(e));
+      }else{
+        const p=toWork(e);
+        shape={type:tool,color:color,width:strokeW(),pts: tool==='pen'?[p]:[p,p]};
+      }
+      render();
+    });
+    canvas.addEventListener('pointermove',e=>{
+      if(!work) return;
+      if(activePtr!=null && e.pointerId!==activePtr) return;
+      if(drag){ updateCropDrag(toWork(e)); render(); return; }
+      if(shape){
+        const p=toWork(e);
+        if(shape.type==='pen'){
+          const last=shape.pts[shape.pts.length-1];
+          if(Math.hypot(p.x-last.x,p.y-last.y)>1.5/viewScale) shape.pts.push(p);
+        }else shape.pts[1]=p;
+        render(); return;
+      }
+      if(mode==='adjust'&&!angle) canvas.style.cursor=CURSORS[zoneAt(toWork(e))];
+      else canvas.style.cursor=mode==='markup'?'crosshair':'default';
+    });
+    function endPointer(e){
+      if(e && activePtr!=null && e.pointerId!==activePtr) return;
+      activePtr=null;
+      if(!work) return;
+      if(drag){
+        drag=null;
+        // a stray tap or a selection that still covers the full frame is no
+        // selection at all — clearing it keeps interior drags starting fresh
+        if(crop&&(crop.w<MIN_CROP||crop.h<MIN_CROP||!cropIsReal())) crop=null;
+        render();
+      }
+      if(shape) finishShape();
+    }
+    canvas.addEventListener('pointerup',endPointer);
+    // if pointer capture was unavailable, a release outside the canvas must
+    // still end the gesture
+    window.addEventListener('pointerup',endPointer);
+    canvas.addEventListener('pointercancel',e=>{
+      if(activePtr!=null && e.pointerId!==activePtr) return;
+      activePtr=null; drag=null; shape=null; render();
+    });
+
+    /* ----- toolbar wiring ----- */
+    function applyModeUI(m){
+      mode=m;
+      tabAdjust.classList.toggle('active',m==='adjust');
+      tabMarkup.classList.toggle('active',m==='markup');
+      tabAdjust.setAttribute('aria-selected',String(m==='adjust'));
+      tabMarkup.setAttribute('aria-selected',String(m==='markup'));
+      rowAdjust.hidden=m!=='adjust'; rowMarkup.hidden=m!=='markup';
+      canvas.style.cursor=m==='markup'?'crosshair':'default';
+    }
+    function setMode(m){
+      if(busy||!work||m===mode) return;
+      if(m==='markup'){ commitAngle(); commitCrop(); }   // markup is WYSIWYG on the final frame
+      applyModeUI(m);
+      fitCanvas(); render();
+    }
+    tabAdjust.addEventListener('click',()=>setMode('adjust'));
+    tabMarkup.addEventListener('click',()=>setMode('markup'));
+    $('edRotL').addEventListener('click',()=>rotate90(false));
+    $('edRotR').addEventListener('click',()=>rotate90(true));
+    $('edFlipH').addEventListener('click',()=>flip(true));
+    $('edFlipV').addEventListener('click',()=>flip(false));
+    $('edCropReset').addEventListener('click',()=>{ if(busy) return; crop=null; render(); });
+    undoBtn.addEventListener('click',doUndo);
+    angleSlider.addEventListener('input',()=>{
+      if(busy||!work){ angleSlider.value=String(angle); return; }
+      angle=parseFloat(angleSlider.value)||0;
+      angleVal.textContent=(angle>0?'+':'')+String(+angle.toFixed(1))+'°';
+      fitCanvas(); render();
+    });
+
+    overlayE.querySelectorAll('.edtool').forEach(b=>{
+      b.addEventListener('click',()=>{
+        overlayE.querySelectorAll('.edtool').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active'); tool=b.dataset.tool;
+      });
+    });
+    overlayE.querySelectorAll('.edwidth').forEach(b=>{
+      b.addEventListener('click',()=>{
+        overlayE.querySelectorAll('.edwidth').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active'); widthKey=b.dataset.w;
+      });
+    });
+    const swatchWrap=$('edSwatches');
+    COLORS.forEach((c,i)=>{
+      const b=document.createElement('button');
+      b.className='ed-swatch'+(i===0?' active':'');
+      b.style.background=c;
+      b.title=c;
+      b.setAttribute('role','radio');
+      b.setAttribute('aria-checked',String(i===0));
+      b.setAttribute('aria-label','Colour '+c);
+      b.addEventListener('click',()=>{
+        swatchWrap.querySelectorAll('.ed-swatch').forEach(x=>{
+          x.classList.remove('active'); x.setAttribute('aria-checked','false');
+        });
+        b.classList.add('active'); b.setAttribute('aria-checked','true'); color=c;
+      });
+      swatchWrap.appendChild(b);
+    });
+
+    /* ----- open / apply / close ----- */
+    async function open(photoInst){
+      const s=++session;                 // invalidates any pending continuation
+      try{
+        const img=await loadImage(photoInst.getDisplaySrc());
+        if(s!==session) return;          // superseded by a newer open/close
+        inst=photoInst;
+        undoStack=[]; angle=0; crop=null; drag=null; shape=null;
+        dirtyFloor=false; restoredPristine=false; activePtr=null;
+        angleSlider.value='0'; angleVal.textContent='0°';
+        setWork(canvasFrom(img));
+        updateUndoBtn();
+        applyModeUI('adjust');
+        overlayE.classList.add('show');
+        lastFocus=document.activeElement;
+        try{ overlayE.querySelector('.modal').focus(); }catch(_){}
+        requestAnimationFrame(()=>{ if(s!==session) return; fitCanvas(); render(); });
+      }catch(e){ console.error('editor open',e); ping('Could not open editor'); }
+    }
+    async function restoreOriginal(){
+      if(busy||!inst||!work) return;
+      const s=session, target=inst;
+      busy=true;
+      try{
+        const img=await loadImage(target.getOriginalSrc());
+        if(s!==session||!work) return;
+        pushUndo();
+        angle=0; angleSlider.value='0'; angleVal.textContent='0°'; crop=null;
+        setWork(canvasFrom(img));
+        restoredPristine=true;           // Apply can now revert the card for real
+        render();
+      }catch(e){ console.error('editor restore',e); ping('Could not load original'); }
+      finally{ busy=false; }
+    }
+    function close(){
+      session++;
+      overlayE.classList.remove('show');
+      inst=null; work=null; wctx=null; undoStack=[]; drag=null; shape=null;
+      dirtyFloor=false; restoredPristine=false; activePtr=null;
+      if(lastFocus && document.contains(lastFocus)){ try{ lastFocus.focus(); }catch(_){} }
+      lastFocus=null;
+    }
+    function requestClose(){
+      if(!work) return;
+      if(isDirty() && !window.confirm('Discard your edits to this photo?')) return;
+      close();
+    }
+    async function apply(){
+      if(busy||!work||!inst) return;
+      if(!isDirty()){ close(); return; }
+      const s=session, target=inst;
+      // "Restore original" with nothing after it reverts the card to the real
+      // original instead of applying a re-encoded copy
+      if(restoredPristine && angle===0 && !cropIsReal()){
+        busy=true; applyBtn.disabled=true;
+        try{ await target.revertOriginal(); if(s===session) close(); }
+        catch(e){ console.error('editor revert',e); ping('Could not restore original'); }
+        finally{ busy=false; applyBtn.disabled=false; }
+        return;
+      }
+      busy=true; applyBtn.disabled=true; applyBtn.textContent='Applying…';
+      try{
+        commitAngle(); commitCrop();
+        const blob=await new Promise(res=>work.toBlob(res,'image/jpeg',0.92));
+        if(s!==session) return;          // closed mid-encode — treat as cancel
+        if(blob) await target.applyEdit(blob);
+        if(s===session) close();
+      }catch(e){ console.error('editor apply',e); ping('Could not apply edits'); }
+      finally{ busy=false; applyBtn.disabled=false; applyBtn.innerHTML='✓ Apply'; }
+    }
+    $('edApply').addEventListener('click',apply);
+    $('edCancel').addEventListener('click',requestClose);
+    $('editorCloseBtn').addEventListener('click',requestClose);
+    $('edOriginal').addEventListener('click',restoreOriginal);
+
+    function refit(){ if(work){ fitCanvas(); render(); } }
+    function isOpen(){ return !!work; }
+    return {open,cancel:requestClose,refit,isOpen};
+  })();
 
   /* ---------- per-photo card ---------- */
   let nextId=0;
@@ -656,7 +1342,11 @@ body{
       '</div>'+
       '<div class="canvas-row">'+
         '<div class="pane">'+
-          '<div class="pane-head"><span><span class="dot"></span>Photo</span><span class="dimReadout">—</span></div>'+
+          '<div class="pane-head"><span><span class="dot"></span>Photo</span>'+
+            '<span class="headright">'+
+            '<span class="moved-tag editedTag" style="display:none">edited</span>'+
+            '<button class="pane-btn cedit" disabled title="Crop, rotate, straighten & markup" aria-label="Edit photo">✎ Edit</button>'+
+            '<span class="dimReadout">—</span></span></div>'+
           '<img class="cphoto" alt="Uploaded photo preview">'+
         '</div>'+
         '<div class="pane map-pane">'+
@@ -683,10 +1373,12 @@ body{
           statusC=card.querySelector('.card-status'),
           buildBtn=card.querySelector('.cbuild'),
           buildPlainBtn=card.querySelector('.cbuildplain'),
-          removeBtn=card.querySelector('.card-remove');
+          removeBtn=card.querySelector('.card-remove'),
+          editBtn=card.querySelector('.cedit'),
+          editedTag=card.querySelector('.editedTag');
     const q=sel=>readoutEl.querySelector(sel);
 
-    let map=null, marker=null, accCircle=null, displaySrc=null, ro=null;
+    let map=null, marker=null, accCircle=null, displaySrc=null, originalSrc=null, ro=null;
     const state={lat:null,lon:null,heading:null,caption:'',captionEdited:false,
                  address:null,pinMoved:false,origLat:null,origLon:null,
                  accuracy:null,gpsStaleMin:null};
@@ -712,6 +1404,8 @@ body{
           photoImg.onerror=rej;
           photoImg.src=displaySrc;
         });
+        originalSrc=displaySrc;   // kept for the editor's "Restore original"
+        editBtn.disabled=false;
 
         // EXIF is read from the ORIGINAL file (conversion can drop metadata)
         let exif={}, gps=null;
@@ -978,12 +1672,17 @@ body{
       const round=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();};
 
       // photo
-      await new Promise((res,rej)=>{
-        const im=new Image();
-        im.onload=()=>{ ctx.save();round(0,0,imgW,imgH,radius);ctx.clip();
-          ctx.drawImage(im,0,0,imgW,imgH);ctx.restore();res(); };
-        im.onerror=rej; im.src=displaySrc;
-      });
+      try{
+        await new Promise((res,rej)=>{
+          const im=new Image();
+          im.onload=()=>{ ctx.save();round(0,0,imgW,imgH,radius);ctx.clip();
+            ctx.drawImage(im,0,0,imgW,imgH);ctx.restore();res(); };
+          im.onerror=rej; im.src=displaySrc;
+        });
+      }catch(e){
+        cstat('Could not render the report image — the photo failed to load.','err');
+        throw e;
+      }
 
       // map — render a clean offscreen copy at the EXACT panel size, then html2canvas it
       const off=document.createElement('div');
@@ -993,11 +1692,23 @@ body{
         scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false,tap:false,
         fadeAnimation:false,zoomAnimation:false,inertia:false})
         .setView([state.lat,state.lon], map?map.getZoom():16);
-      tileLayerFor(currentMapType()).addTo(cleanMap);
+      // Wait for the tiles themselves instead of a fixed delay: Leaflet fires
+      // 'load' once every visible tile has loaded or errored. A timeout keeps
+      // offline/slow exports from hanging; errors mark the capture incomplete.
+      const tileLayer=tileLayerFor(currentMapType());
+      let tileErrors=0;
+      tileLayer.on('tileerror',()=>{ tileErrors++; });
+      const tilesReady=new Promise(res=>{
+        const t=setTimeout(()=>res(false),8000);
+        tileLayer.on('load',()=>{ clearTimeout(t); res(true); });
+      });
+      tileLayer.addTo(cleanMap);
       cleanMap.invalidateSize(false);
 
+      let mapComplete=true;
       try{
-        await new Promise(r=>setTimeout(r,1200));
+        mapComplete=(await tilesReady)&&tileErrors===0;
+        await new Promise(r=>setTimeout(r,150));   // let fetched tiles paint
         cleanMap.invalidateSize(false);
         const mapCanvas=await html2canvas(off,{useCORS:true,allowTaint:false,
           backgroundColor:'#e7e2d6',scale:captureScale,logging:false});
@@ -1020,9 +1731,28 @@ body{
         await new Promise(r=>{ pin.onload=r; pin.onerror=r; pin.src='data:image/svg+xml,'+PIN_SVG; });
         const pw=34,ph=44;
         ctx.drawImage(pin, tipX-pw/2, tipY-ph, pw, ph);
+        // provider credit baked into the exported map panel
+        const attr=attributionFor(currentMapType());
+        ctx.textAlign='left';
+        ctx.font='9px "IBM Plex Mono", monospace';
+        const tw=ctx.measureText(attr).width;
+        ctx.fillStyle='rgba(255,255,255,.78)';
+        ctx.fillRect(mx+mapW-tw-12, mapH-16, tw+12, 16);
+        ctx.fillStyle='#3a3d42';
+        ctx.fillText(attr, mx+mapW-tw-6, mapH-5);
+        if(!mapComplete){
+          const warn='⚠ MAP TILES INCOMPLETE';
+          ctx.font='600 10px "IBM Plex Mono", monospace';
+          const ww=ctx.measureText(warn).width;
+          ctx.fillStyle='rgba(255,255,255,.85)';
+          ctx.fillRect(mx+8, 8, ww+12, 18);
+          ctx.fillStyle='#c54405';
+          ctx.fillText(warn, mx+14, 21);
+        }
         ctx.restore();
       }catch(e){
         console.error('map capture',e);
+        mapComplete=false;
         ctx.save();round(imgW+gap,0,mapW,mapH,radius);ctx.clip();
         ctx.fillStyle='#e7e2d6';ctx.fillRect(imgW+gap,0,mapW,mapH);
         ctx.fillStyle='#8b8e94';ctx.font='13px monospace';ctx.textAlign='center';
@@ -1065,7 +1795,8 @@ body{
       }
 
       const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));
-      gpsStatus();
+      if(!mapComplete) cstat('Report built, but some map tiles didn’t load — check the map panel.','warn');
+      else gpsStatus();
       return blob;
     }
 
@@ -1074,10 +1805,39 @@ body{
       return 'geotag_'+c.replace(/[^\w.-]/g,'')+(suffix||'')+'.png';
     }
 
+    /* ----- editor integration: swap the display image, never the file ----- */
+    const retiredSrcs=[];   // superseded edit URLs; an in-flight export may still
+                            // read them, so they are revoked on card removal
+    async function applyEdit(blob){
+      const url=URL.createObjectURL(blob);
+      try{
+        await new Promise((res,rej)=>{ photoImg.onload=res; photoImg.onerror=rej; photoImg.src=url; });
+      }catch(e){ URL.revokeObjectURL(url); throw e; }
+      if(displaySrc && displaySrc!==originalSrc) retiredSrcs.push(displaySrc);
+      displaySrc=url;
+      editedTag.style.display='inline-block';
+      dimEl.textContent=photoImg.naturalWidth+' × '+photoImg.naturalHeight+' px';
+      syncMapHeight();
+      ping('Photo updated ✓');
+    }
+    async function revertOriginal(){
+      if(displaySrc===originalSrc) return;
+      await new Promise((res,rej)=>{ photoImg.onload=res; photoImg.onerror=rej; photoImg.src=originalSrc; });
+      if(displaySrc && displaySrc!==originalSrc) retiredSrcs.push(displaySrc);
+      displaySrc=originalSrc;
+      editedTag.style.display='none';
+      dimEl.textContent=photoImg.naturalWidth+' × '+photoImg.naturalHeight+' px';
+      syncMapHeight();
+      ping('Original photo restored ✓');
+    }
+
     function remove(){
       if(ro) ro.disconnect();
       if(map){ map.remove(); map=null; marker=null; accCircle=null; }
-      if(displaySrc){ URL.revokeObjectURL(displaySrc); displaySrc=null; }
+      if(displaySrc && displaySrc!==originalSrc) URL.revokeObjectURL(displaySrc);
+      if(originalSrc) URL.revokeObjectURL(originalSrc);
+      retiredSrcs.splice(0).forEach(u=>URL.revokeObjectURL(u));
+      displaySrc=null; originalSrc=null;
       card.remove();
       const i=photos.indexOf(inst); if(i>=0) photos.splice(i,1);
       updateCount();
@@ -1089,9 +1849,12 @@ body{
       ro.observe(photoImg);
     }
 
-    const inst={ buildBtn, buildPlainBtn, buildExport, filename, restyleMap, syncMapHeight, remove };
+    const inst={ buildBtn, buildPlainBtn, buildExport, filename, restyleMap, syncMapHeight, remove,
+                 applyEdit, revertOriginal, hasGps:()=>state.lat!=null,
+                 getDisplaySrc:()=>displaySrc, getOriginalSrc:()=>originalSrc };
     buildBtn.addEventListener('click',()=>openExport(inst,buildBtn,true));
     buildPlainBtn.addEventListener('click',()=>openExport(inst,buildPlainBtn,false));
+    editBtn.addEventListener('click',()=>editor.open(inst));
     removeBtn.addEventListener('click',remove);
     photos.push(inst);
     updateCount();
@@ -1137,10 +1900,11 @@ body{
   async function exportAllDocx(triggerBtn,withCaption){
     if(!photos.length) return;
     if(typeof docx==='undefined'){ ping('Word export unavailable — library not loaded'); return; }
+    if(exportBusy){ ping('Another export is still running'); return; }
+    exportBusy=true;
 
     const label=triggerBtn.innerHTML;
     const batch=photos.slice();
-    const prevDisabled=batch.map(p=>[p.buildBtn.disabled,p.buildPlainBtn.disabled]);
     exportDocxBtn.disabled=true; exportDocxPlainBtn.disabled=true;
     $('clearAllBtn').disabled=true;
     batch.forEach(p=>{ p.buildBtn.disabled=true; p.buildPlainBtn.disabled=true; });
@@ -1194,10 +1958,16 @@ body{
       console.error('word export',e);
       ping('Word export failed');
     }finally{
+      exportBusy=false;
       exportDocxBtn.disabled=false; exportDocxPlainBtn.disabled=false;
       triggerBtn.innerHTML=label;
       $('clearAllBtn').disabled=false;
-      batch.forEach((p,i)=>{ p.buildBtn.disabled=prevDisabled[i][0]; p.buildPlainBtn.disabled=prevDisabled[i][1]; });
+      // recompute from current state — a photo may have finished loading (or
+      // been found GPS-less) while the batch ran, so a snapshot would be stale
+      batch.forEach(p=>{
+        const ok=p.hasGps();
+        p.buildBtn.disabled=!ok; p.buildPlainBtn.disabled=!ok;
+      });
     }
   }
   exportDocxBtn.addEventListener('click',()=>exportAllDocx(exportDocxBtn,true));
@@ -1212,11 +1982,13 @@ body{
     });
   });
 
-  window.addEventListener('resize',()=>{ photos.forEach(p=>p.syncMapHeight()); });
+  window.addEventListener('resize',()=>{ photos.forEach(p=>p.syncMapHeight()); editor.refit(); });
 
   $('closeModal').addEventListener('click',()=>overlay.classList.remove('show'));
   overlay.addEventListener('click',e=>{ if(e.target===overlay) overlay.classList.remove('show'); });
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape') overlay.classList.remove('show'); });
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){ overlay.classList.remove('show'); editor.cancel(); }
+  });
 
   $('downloadImgBtn').addEventListener('click',()=>{
     if(!currentBlob) return;
@@ -1239,10 +2011,25 @@ body{
 })();
 </script>
 <script>
-  // Register the service worker for offline / installable PWA support.
+  // Register the service worker for offline / installable PWA support, and
+  // surface updates instead of leaving installed users on a stale cached build.
   if('serviceWorker' in navigator){
-    window.addEventListener('load',()=>{
-      navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed',err));
+    var updateBar=document.getElementById('updateBar');
+    document.getElementById('updateReload').addEventListener('click',function(){ location.reload(); });
+    // A controllerchange while the page was already controlled means a new
+    // service worker (new build) took over — offer a reload, never force one.
+    var hadController=!!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(hadController) updateBar.classList.add('show');
+      hadController=true;
+    });
+    window.addEventListener('load',function(){
+      navigator.serviceWorker.register('sw.js').then(function(reg){
+        // long-lived installed apps rarely re-navigate; re-check on each return
+        document.addEventListener('visibilitychange',function(){
+          if(document.visibilityState==='visible') reg.update().catch(function(){});
+        });
+      }).catch(function(err){ console.warn('SW registration failed',err); });
     });
   }
 </script>
