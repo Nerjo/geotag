@@ -444,6 +444,9 @@ body{
     <div class="privacy">
       <span class="tag">100% LOCAL</span>
       <span>Photos are read in your browser. Nothing is uploaded — coordinates never leave this device (map tiles &amp; optional address lookup excepted).</span>
+      <!-- keep in sync with CACHE_VERSION in sw.js — this is how you tell a
+           stale cached build from the current deploy at a glance -->
+      <span class="buildtag" style="margin-left:auto;white-space:nowrap;color:var(--ink-faint)">BUILD V8</span>
     </div>
   </header>
 
@@ -454,7 +457,7 @@ body{
     <span class="btn accent browse" type="button">Browse files</span>
   </div>
 
-  <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.heic,image/heic,image/jpeg,image/png" multiple hidden>
+  <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.heic,.heif,image/heic,image/heif,image/jpeg,image/png" multiple hidden>
 
   <div class="status" id="status"></div>
 
@@ -608,7 +611,7 @@ body{
   const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const currentMapType = ()=>document.querySelector('input[name="mapType"]:checked').value;
 
-  function validImage(f){ return f && (f.type.startsWith('image/') || /\.heic$/i.test(f.name)); }
+  function validImage(f){ return f && (f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name)); }
 
   // Draw `img` into the dest rect using COVER fit (uniform scale + centre-crop).
   function drawCover(ctx,img,dx,dy,dw,dh){
@@ -731,12 +734,23 @@ body{
     return '© OpenStreetMap contributors';
   }
 
-  /* ---------- HEIC ---------- */
+  /* ---------- HEIC / HEIF ---------- */
+  function isHeicFile(f){
+    return /\.(heic|heif)$/i.test(f.name) || f.type==='image/heic' || f.type==='image/heif';
+  }
   async function toDisplayable(file,onStatus){
-    if(!/\.heic$/i.test(file.name) && file.type!=='image/heic') return file;
+    if(!isHeicFile(file)) return file;
+    if(typeof heic2any==='undefined')
+      throw new Error('HEIC converter didn’t load — reload the app and try this photo again.');
     if(onStatus) onStatus('Converting HEIC…','loading');
-    const blob=await heic2any({blob:file,toType:'image/jpeg',quality:0.9});
-    return new File([Array.isArray(blob)?blob[0]:blob], file.name.replace(/\.heic$/i,'.jpg'), {type:'image/jpeg'});
+    try{
+      const blob=await heic2any({blob:file,toType:'image/jpeg',quality:0.9});
+      return new File([Array.isArray(blob)?blob[0]:blob],
+        file.name.replace(/\.(heic|heif)$/i,'.jpg'), {type:'image/jpeg'});
+    }catch(e){
+      console.error('heic2any conversion failed',e);
+      throw new Error('Could not convert this HEIC photo — export it as JPEG and upload that instead.');
+    }
   }
 
   /* ---------- polite reverse-geocode queue ----------
@@ -1441,7 +1455,10 @@ body{
         queueGeocode(()=>reverseGeocode(state.lat,state.lon));
       }catch(err){
         console.error(err);
-        cstat('Could not process this image. Try another file.','err');
+        // conversion errors carry a specific, actionable message — show it
+        const msg=err&&err.message&&/HEIC/i.test(err.message)
+          ? err.message : 'Could not process this image. Try another file.';
+        cstat(msg,'err');
       }
     }
 
