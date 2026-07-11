@@ -91,10 +91,10 @@
         <span id="batchProgressText" role="status" aria-live="polite"></span>
       </div>
       <button class="btn accent" id="exportDocxBtn">⇣ Export all to Word</button>
-      <button class="btn" id="exportDocxPlainBtn">⇣ Word (no captions)</button>
       <details class="export-menu">
-        <summary class="btn ghost">Export all…</summary>
+        <summary class="btn ghost">More exports…</summary>
         <div class="export-menu-items">
+          <button type="button" id="exportDocxPlainBtn">Word (no captions)</button>
           <button type="button" id="exportZipBtn">Report images (ZIP)</button>
           <button type="button" id="exportPdfBtn">Combined PDF</button>
           <button type="button" id="exportCsvBtn">Records (CSV)</button>
@@ -216,14 +216,14 @@
   <button id="updateReload">Reload</button>
 </div>
 
-<script src="sw-assets.js"></script>
-<script src="app/config.js"></script>
-<script src="app/runtime.js"></script>
-<script src="vendor/exifr/full.umd.js"></script>
-<script src="vendor/leaflet/leaflet.js"></script>
-<script src="vendor/html2canvas/html2canvas.min.js"></script>
-<script src="vendor/docx/docx.iife.js"></script>
-<script src="vendor/qrcode/qrcode.js"></script>
+<!-- Startup keeps only the libraries needed to show the app and read photos.
+     Export-only libraries (qrcode, html2canvas, docx, heic2any) load on demand
+     from app/main.js the first time they are used. -->
+<script src="sw-assets.js" defer></script>
+<script src="app/config.js" defer></script>
+<script src="app/runtime.js" defer></script>
+<script src="vendor/exifr/full.umd.js" defer></script>
+<script src="vendor/leaflet/leaflet.js" defer></script>
 <script src="app/editor.js" defer></script>
 <script src="app/main.js" defer></script>
 <script src="app/register-sw.js" defer></script>
