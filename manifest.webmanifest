@@ -1,0 +1,21 @@
+{
+  "name": "GeoTag · Field Inspection Mapper",
+  "short_name": "GeoTag",
+  "description": "Read a geotagged photo's GPS entirely on-device, plot it on a map, and export a side-by-side inspection report image. Photos never leave your device.",
+  "id": "/",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#ece7dc",
+  "theme_color": "#ef5d12",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
