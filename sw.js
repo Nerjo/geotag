@@ -1,161 +1,117 @@
-/* GeoTag service worker — offline app shell + runtime map-tile cache.
-   Bump CACHE_VERSION whenever any precached asset changes. */
+/* GeoTag service worker: content-addressed shell recovery and share target. */
 "use strict";
 
-const CACHE_VERSION = "geotag-v11";
-const SHELL_CACHE = CACHE_VERSION + "-shell";
-const TILE_CACHE = CACHE_VERSION + "-tiles";
-const TILE_MAX = 300; // cap stored map tiles
+importScripts("sw-assets.js", "app/config.js");
 
-// App shell — everything needed to open the app with no network.
-const SHELL_ASSETS = [
-  ".",
-  "index.html",
-  "manifest.webmanifest",
-  "vendor/leaflet/leaflet.css",
-  "vendor/leaflet/leaflet.js",
-  "vendor/leaflet/images/marker-icon.png",
-  "vendor/leaflet/images/marker-icon-2x.png",
-  "vendor/leaflet/images/marker-shadow.png",
-  "vendor/leaflet/images/layers.png",
-  "vendor/leaflet/images/layers-2x.png",
-  "vendor/exifr/full.umd.js",
-  "vendor/html2canvas/html2canvas.min.js",
-  "vendor/heic2any/heic2any.min.js",
-  "vendor/docx/docx.iife.js",
-  "vendor/fonts/ibm-plex.css",
-  "vendor/fonts/ibm-plex-mono-400.woff2",
-  "vendor/fonts/ibm-plex-mono-500.woff2",
-  "vendor/fonts/ibm-plex-mono-600.woff2",
-  "vendor/fonts/ibm-plex-sans-400.woff2",
-  "vendor/fonts/ibm-plex-sans-500.woff2",
-  "vendor/fonts/ibm-plex-sans-600.woff2",
-  "vendor/fonts/ibm-plex-sans-700.woff2",
-  "vendor/fonts/ibm-plex-sans-cond-600.woff2",
-  "vendor/fonts/ibm-plex-sans-cond-700.woff2",
-  "icons/icon-192.png",
-  "icons/icon-512.png",
-  "icons/icon-maskable-512.png",
-  "icons/apple-touch-icon-180.png",
-  "icons/favicon.svg",
-  "icons/favicon-32.png"
-];
+const CACHE_PREFIX = "geotag-shell-";
+const SHELL_CACHE = CACHE_PREFIX + self.GEOTAG_BUILD_ID;
+const SHARE_CACHE = "geotag-share-v1";
+const SHELL_ASSETS = self.GEOTAG_SHELL_ASSETS || [];
+const SHARE_RETENTION_MS = 15 * 60 * 1000;
 
-const TILE_HOSTS = [
-  "tile.openstreetmap.org",
-  "server.arcgisonline.com",
-  "tile.opentopomap.org"
-];
+async function purgeExpiredSharedPhotos() {
+  const cache = await caches.open(SHARE_CACHE);
+  const requests = await cache.keys();
+  await Promise.all(requests.map(async request => {
+    const response = await cache.match(request);
+    const stagedAt = Number(response && response.headers.get("X-GeoTag-Staged-At"));
+    if (!stagedAt || Date.now() - stagedAt > SHARE_RETENTION_MS) await cache.delete(request);
+  }));
+}
 
-self.addEventListener("install", (event) => {
+self.addEventListener("install", event => {
+  event.waitUntil(caches.open(SHELL_CACHE).then(cache => cache.addAll(
+    SHELL_ASSETS.map(asset => new Request(new URL(asset, self.registration.scope), { cache: "reload" }))
+  )));
+});
+
+self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL_ASSETS)).then(() => self.skipWaiting())
+    caches.keys().then(keys => Promise.all(
+      keys
+        // Delete every superseded GeoTag-owned cache while preserving the
+        // current shell and short-lived share-target bridge. Never touch a
+        // cache owned by another application on the same origin.
+        .filter(key => key.startsWith("geotag-") && key !== SHELL_CACHE && key !== SHARE_CACHE)
+        .map(key => caches.delete(key))
+    )).then(() => purgeExpiredSharedPhotos()).then(() => self.clients.claim())
   );
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          // only touch our own versioned caches — other apps on this origin
-          // (or future GeoTag features) must not lose their storage
-          .filter((k) => k.startsWith("geotag-") && k !== SHELL_CACHE && k !== TILE_CACHE)
-          .map((k) => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
-  );
+self.addEventListener("message", event => {
+  if (!event.data) return;
+  if (event.data.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data.type === "CLEAR_MAP_DATA") {
+    event.waitUntil(caches.keys().then(keys => Promise.all(
+      keys.filter(key => key.startsWith("geotag-") && /(tile|map)/i.test(key)).map(key => caches.delete(key))
+    )));
+  }
+  if (event.data.type === "CLEAR_PRIVATE_DATA") {
+    event.waitUntil(caches.keys().then(keys => Promise.all(
+      keys.filter(key => (
+        (key.startsWith("geotag-") && /(tile|map)/i.test(key)) || key === SHARE_CACHE
+      )).map(key => caches.delete(key))
+    )));
+  }
 });
 
-function isTile(url) {
-  return TILE_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith("." + h));
+async function receiveSharedPhoto(request) {
+  await purgeExpiredSharedPhotos();
+  const form = await request.formData();
+  const file = form.get("photos");
+  if (!(file instanceof File)) return Response.redirect(new URL("./?share-error=missing", self.registration.scope), 303);
+  const token = self.crypto && self.crypto.randomUUID ? self.crypto.randomUUID() : Date.now().toString(36);
+  const url = new URL("shared/" + token, self.registration.scope);
+  const headers = new Headers({
+    "Content-Type": file.type || "application/octet-stream",
+    "X-GeoTag-Filename": encodeURIComponent(file.name || "shared-photo.jpg"),
+    "X-GeoTag-Staged-At": String(Date.now()),
+    "Cache-Control": "no-store"
+  });
+  const cache = await caches.open(SHARE_CACHE);
+  await cache.put(url, new Response(file, { headers }));
+  return Response.redirect(new URL("./?share-target=" + encodeURIComponent(token), self.registration.scope), 303);
 }
 
-// Trim the tile cache to TILE_MAX entries (oldest first).
-async function trimTileCache() {
-  const cache = await caches.open(TILE_CACHE);
-  const keys = await cache.keys();
-  if (keys.length <= TILE_MAX) return;
-  for (let i = 0; i < keys.length - TILE_MAX; i++) await cache.delete(keys[i]);
-}
-
-self.addEventListener("fetch", (event) => {
-  const req = event.request;
-  if (req.method !== "GET") return;
-
+self.addEventListener("fetch", event => {
+  const request = event.request;
   let url;
-  try { url = new URL(req.url); } catch (_) { return; }
+  try { url = new URL(request.url); } catch (_) { return; }
 
-  // Map tiles: stale-while-revalidate into a capped cache so previously
-  // viewed areas keep working offline. Responses are kept as-is (CORS) so
-  // html2canvas export stays untainted.
-  if (isTile(url)) {
-    event.respondWith(
-      caches.open(TILE_CACHE).then(async (cache) => {
-        const cached = await cache.match(req);
-        const network = fetch(req).then((res) => {
-          if (res && (res.ok || res.type === "opaque")) {
-            cache.put(req, res.clone()).then(trimTileCache).catch(() => {});
-          }
-          return res;
-        }).catch(() => null);
-        return cached || network || fetch(req);
-      })
-    );
+  if (request.method === "POST" && url.origin === self.location.origin && /\/share-target\/?$/.test(url.pathname)) {
+    event.respondWith(receiveSharedPhoto(request));
+    return;
+  }
+  if (request.method !== "GET") return;
+
+  // Third-party map/geocoder traffic is never copied into Cache Storage.
+  // The browser remains free to honour provider HTTP cache headers normally.
+  if (url.origin !== self.location.origin) return;
+
+  if (url.pathname.includes("/shared/")) {
+    event.respondWith(caches.open(SHARE_CACHE).then(cache => cache.match(request)).then(response => response || new Response("", { status: 404 })));
     return;
   }
 
-  // Nominatim reverse geocode and any other cross-origin GET: pass through
-  // (the app already degrades gracefully when this is unavailable).
-  if (url.origin !== self.location.origin) return;
-
-  // Navigations: network-first so a new index.html reaches installed users
-  // even when sw.js itself didn't change (the v2→multi-photo trap). The cached
-  // shell covers offline, HTTP errors (mid-deploy 404/503) and slow links — a
-  // short race keeps launch snappy on 1-bar connections.
-  if (req.mode === "navigate") {
+  if (request.mode === "navigate") {
     event.respondWith((async () => {
-      let netRes = null;
-      const network = fetch(req).then((res) => {
-        netRes = res;
-        if (res && res.ok) {
-          const copy = res.clone();
-          // one normalized key — query-string variants must not pile up copies
-          caches.open(SHELL_CACHE).then((c) => c.put("index.html", copy)).catch(() => {});
-          return res;
-        }
-        return null; // error page → prefer the cached shell
-      }).catch(() => null);
-
-      const winner = await Promise.race([
-        network,
-        new Promise((r) => setTimeout(() => r("timeout"), 3500))
-      ]);
-      if (winner && winner !== "timeout") return winner;
-
-      // "index.html" first: it is the entry the network path keeps fresh
-      const cached = (await caches.match("index.html")) || (await caches.match(req));
+      // Keep one internally consistent shell while a newer worker waits for
+      // the user's explicit reload. The new worker owns a different cache.
+      const cache = await caches.open(SHELL_CACHE);
+      const indexUrl = new URL("index.html", self.registration.scope);
+      const cached = await cache.match(indexUrl);
       if (cached) return cached;
-      return (await network) || netRes || Response.error();
+      const response = await fetch(request);
+      if (response && response.ok) await cache.put(indexUrl, response.clone());
+      return response;
     })());
     return;
   }
 
-  // Same-origin app shell (scripts, styles, fonts, icons): cache-first with a
-  // network fallback; versioned by CACHE_VERSION bumps.
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (res && res.ok && res.type === "basic") {
-          const copy = res.clone();
-          caches.open(SHELL_CACHE).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      }).catch(() => {
-        if (req.mode === "navigate") return caches.match("index.html");
-        return new Response("", { status: 504, statusText: "Offline" });
-      });
-    })
-  );
+  event.respondWith(caches.open(SHELL_CACHE).then(cache => cache.match(request).then(cached => cached || fetch(request).then(response => {
+    if (response && response.ok && response.type === "basic") {
+      cache.put(request, response.clone()).catch(() => {});
+    }
+    return response;
+  }))));
 });

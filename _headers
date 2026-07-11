@@ -1,0 +1,25 @@
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'; worker-src 'self'
+  Permissions-Policy: geolocation=(self), camera=(self), microphone=(), usb=(), payment=()
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/sw.js
+  Cache-Control: no-cache, must-revalidate
+
+/sw-assets.js
+  Cache-Control: no-cache, must-revalidate
+
+/app/config.js
+  Cache-Control: no-cache, must-revalidate
+
+/vendor/*
+  Cache-Control: no-cache, must-revalidate
+
+/icons/*
+  Cache-Control: no-cache, must-revalidate

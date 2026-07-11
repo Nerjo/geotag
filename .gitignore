@@ -4,3 +4,11 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# local dependencies and test output
+node_modules/
+playwright-report/
+test-results/
+coverage/
+dist/
+debug.log

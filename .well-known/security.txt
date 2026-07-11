@@ -1,0 +1,5 @@
+Contact: https://github.com/Nerjo/geotag/security/advisories/new
+Policy: https://github.com/Nerjo/geotag/blob/main/SECURITY.md
+Preferred-Languages: en
+Canonical: https://github.com/Nerjo/geotag/blob/main/.well-known/security.txt
+Expires: 2027-07-11T00:00:00Z
