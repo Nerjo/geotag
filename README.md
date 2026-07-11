@@ -62,9 +62,7 @@ serve the repo root over HTTPS.
 
 A full design and architecture document — covering the privacy model, data flow,
 network egress, deployment, and how the app was built — lives in
-[`docs/DESIGN_AND_ARCHITECTURE.md`](docs/DESIGN_AND_ARCHITECTURE.md), with a
-print-ready PDF at
-[`docs/GeoTag-Design-and-Architecture.pdf`](docs/GeoTag-Design-and-Architecture.pdf).
+[`docs/DESIGN_AND_ARCHITECTURE.md`](docs/DESIGN_AND_ARCHITECTURE.md)
 
 ## Project layout
 
