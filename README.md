@@ -12,7 +12,7 @@ Drop in one photo or a whole batch — each gets its own map, readout, and repor
 
 - 📍 Drop **one or many** geotagged photos (JPG / PNG / HEIC). Each gets its own
   card showing latitude/longitude (decimal & DMS), altitude, heading, capture
-  time, and camera — plus its own report button.
+  time, camera, map, and report controls.
 - 🗺️ Interactive Leaflet map per photo with Street / Satellite / Topo styles
   (the style switch applies to every photo at once).
 - 🏷️ **Editable caption**, auto-filled from a reverse-geocoded address and printed
@@ -22,8 +22,12 @@ Drop in one photo or a whole batch — each gets its own map, readout, and repor
   OpenStreetMap.
 - 🧭 **Heading / direction control** — set or edit the camera-pointing direction;
   a direction cone is drawn on the map and baked into the report.
-- 🧾 One-click **"Build report image"** per photo — composited photo + map with a
-  coordinate caption, ready to copy, download, or share.
+- ✏️ Per-photo **Edit** button — crop, rotate, flip, straighten, correct vertical
+  or horizontal perspective, and add Acrobat-style markup (pen, line, arrow,
+  box, ellipse, revision cloud, and text). Edits affect only the report picture;
+  the original file and its GPS metadata remain untouched.
+- 🧾 Build individual report images or export all photos to Word, with captioned
+  and no-caption layouts available for inspection workflows.
 - 🔒 **100% local.** Photos are read in the browser and never uploaded.
   Only map tiles and the optional address lookup touch the network.
 - 📴 **Works offline.** All libraries and fonts are vendored and precached by a
@@ -69,7 +73,7 @@ index.html              App shell + all logic
 manifest.webmanifest    PWA metadata (name, icons, theme)
 sw.js                   Service worker (offline shell + tile cache)
 vendor/                 Vendored, offline-capable libraries & fonts
-  leaflet/  exifr/  html2canvas/  heic2any/  fonts/
+  leaflet/  exifr/  html2canvas/  heic2any/  docx/  fonts/
 icons/                  App icons (192 / 512 / maskable / apple-touch / favicon)
 docs/                   Design & architecture document (Markdown + PDF)
 ```
@@ -77,4 +81,6 @@ docs/                   Design & architecture document (Markdown + PDF)
 ## Updating
 
 Bump `CACHE_VERSION` in `sw.js` whenever any precached asset changes so clients
-pick up the new version.
+pick up the new version. Navigations are network-first, so a changed
+`index.html` reaches installed users even without a version bump, and an
+"Update ready" banner offers a reload when a new service worker takes over.
