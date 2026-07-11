@@ -45,7 +45,7 @@
 **Decisions & outlook**
 18. Known limits & out of scope
 19. Architecture Decision Records (ADRs)
-20. Implementation at Suncor & future roadmap
+20. Implementation Internally & future roadmap
 21. Summary for reviewers
 
 ---
@@ -753,9 +753,7 @@ GeoTag is a set of **static files** served from the repository root, hostable on
 essentially any static host: GitHub Pages, Netlify, Cloudflare Pages, Azure Static
 Web Apps, S3 + CloudFront, or an internal static web server / intranet share over
 HTTPS. There is **no runtime, no server process, no database, and no scheduled
-job**. Operationally: "deploy the files and serve them over HTTPS." For a Suncor
-deployment this would be an approved internal static host rather than a public
-provider (see §20.1).
+job**. Operationally: "deploy the files and serve them over HTTPS." 
 
 ### 16.2 Source code & project layout
 Source is stored in the Git repository **`nerjo/geotag`**.
@@ -883,9 +881,8 @@ asset/inspection systems.
 
 ### 18.3 Design choices that may need stakeholder approval
 - **Use of public OSM/Esri/OpenTopoMap/Nominatim services** vs. an org-hosted or
-  commercial provider (data-egress / usage-policy / SLA decision) — at Suncor, the
-  SunMaps / SiteView option and its licensing/CORS feasibility (see §20.1).
-- **Internal hosting location & approval** — an approved Suncor static-hosting
+  commercial provider (data-egress / usage-policy / SLA decision). 
+- **Internal hosting location & approval** — an approved static-hosting
   location and HTTPS endpoint (see §20.1).
 - **Branding** of the report image (logo/footer) for official use.
 - **Accessibility conformance level** to be formally certified.
@@ -987,28 +984,25 @@ and status.
 
 ---
 
-## 20. Implementation at Suncor & future roadmap
+## 20. Implementation & future roadmap
 
-### 20.1 Implementing at Suncor — primary next steps
+### 20.1 Implementing — primary next steps
 
-If GeoTag is adopted at Suncor, two changes take priority before rollout. Both are
+If GeoTag is adopted, two changes take priority before rollout. Both are
 localised and consistent with decisions already recorded in this document.
 
-**1. Host the app on Suncor infrastructure (not Netlify / public hosting).**
+**1. Host the app on internal infrastructure (public hosting).**
 GeoTag is a set of static files (§16.1), so it can be served from any
-Suncor-managed static host or intranet web server over HTTPS — no servers, runtime,
+Internally-managed static host or intranet web server over HTTPS — no servers, runtime,
 or database to stand up. Hosting it internally keeps the app, and the network
-requests it makes, inside Suncor's environment and governance, and lets Suncor
+requests it makes, inside internal environment and governance, and lets internal
 apply its own TLS, access control, and the recommended security headers / CSP
 (§16.5). *Prerequisite:* an approved internal HTTPS static-hosting location.
 
-**2. Replace the public map tiles with Suncor's SunMaps / SiteView — *if viable and
+**2. Replace the public map tiles with Internal mapping services — *if viable and
 permissible*.** Today the map uses public OSM / Esri / OpenTopoMap tiles (ADR-004),
-so tile requests (and the device IP) reach external providers. Pointing the map at
-Suncor's internal mapping services — **SunMaps** or **SiteView** — would keep
-location data inside Suncor and could provide plant-accurate basemaps. Whether this
-is feasible depends on:
-- whether SunMaps / SiteView exposes a **standard tile endpoint** (XYZ
+so tile requests (and the device IP) reach external providers. Pointing the map at internal mapping services would keep location data internally and could provide plant-accurate basemaps. Whether this is feasible depends on:
+- whether internal mapping services exposes a **standard tile endpoint** (XYZ
   `{z}/{x}/{y}` or WMTS) that Leaflet can consume — if so, this is a small change to
   `tileLayerFor()` (`index.html`) and the service worker's `TILE_HOSTS` (`sw.js`),
   keeping Leaflet as the renderer;
@@ -1021,14 +1015,14 @@ Until this is confirmed viable and permitted, the app keeps working with the pub
 tile providers — so it is an enhancement, not a blocker.
 
 *Related:* reverse geocoding (Nominatim, ADR-005) would likewise be repointed to a
-Suncor-approved address/asset lookup at the same time, or simply disabled, since
+internally-approved address/asset lookup at the same time, or simply disabled, since
 captions are editable by hand.
 
 ### 20.2 Further enhancements
 
 Optional, to be scoped with IT / Digital Services:
-- **Internal map / geocoding providers** — see §20.1 (SunMaps / SiteView and an
-  internal geocoder) for the Suncor-specific path; the change points are
+- **Internal map / geocoding providers** — see §20.1 (Internal mapping services and an
+  internal geocoder) for the internal-specific path; the change points are
   `tileLayerFor()` / the geocode URL and the service worker's `TILE_HOSTS`.
 - **Strict CSP & security headers** at the static host (§16.5).
 - **Automated testing** (unit/E2E) and a formal **WCAG 2.1 AA audit** with
@@ -1058,5 +1052,5 @@ Optional, to be scoped with IT / Digital Services:
 | How is it built/tested/deployed? | No build; manual testing today; deploy = publish files + bump cache version. |
 | Accessibility target? | WCAG 2.1 AA baseline; formal audit outstanding. |
 | Offline? | Yes — app shell and viewed tiles; only fresh tiles + geocoding need the network. |
-| Biggest decisions to approve? | Map/geocode provider, report branding, accessibility certification (§18.3). At Suncor: internal hosting location and SunMaps/SiteView viability (§20.1). |
+| Biggest decisions to approve? | Map/geocode provider, report branding, accessibility certification (§18.3). Intenrally: internal hosting location viability (§20.1). |
 | How was it built? | Human-directed, AI-assisted (Claude Code) iterative development — see §17. |
