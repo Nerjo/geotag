@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "geotag",
+  "name": "geotagv12",
   "compatibility_date": "2026-07-10",
   "observability": {
     "enabled": true
