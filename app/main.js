@@ -10,7 +10,7 @@
   // Standalone build serves Leaflet/exifr/etc. from local vendored files. If a
   // file is missing or fails to parse, fail with a clear message instead of a
   // blank page.
-  if(!CONFIG || !RT || typeof L==='undefined' || typeof exifr==='undefined' || typeof qrcode==='undefined'){
+  if(!CONFIG || !RT || typeof L==='undefined' || typeof exifr==='undefined'){
     statusEl.className='status show err';
     statusEl.innerHTML='<span>Couldn’t load the app libraries. Try reloading the page.</span>';
     return;
@@ -237,22 +237,32 @@
     ctx.restore();
   }
 
+  /* ---------- on-demand vendor libraries ----------
+     Export-only libraries are not part of the startup payload; each loads once,
+     the first time a feature needs it. The service worker precaches them, so
+     installed users get them offline too. A failed load is retryable. */
+  const vendorLoads={};
+  function loadVendor(src,ready,unavailable){
+    if(ready()) return Promise.resolve();
+    if(vendorLoads[src]) return vendorLoads[src];
+    vendorLoads[src]=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      const fail=()=>{ delete vendorLoads[src]; reject(new Error(unavailable)); };
+      script.src=src;
+      script.onload=()=>ready()?resolve():fail();
+      script.onerror=fail;
+      document.head.appendChild(script);
+    });
+    return vendorLoads[src];
+  }
+  const loadQrLibrary=()=>loadVendor('vendor/qrcode/qrcode.js',()=>typeof qrcode!=='undefined','QR generator unavailable');
+  const loadMapCapture=()=>loadVendor('vendor/html2canvas/html2canvas.min.js',()=>typeof html2canvas!=='undefined','Map capture library unavailable');
+  const loadDocxLibrary=()=>loadVendor('vendor/docx/docx.iife.js',()=>typeof docx!=='undefined','Word library unavailable');
+  const loadHeicLibrary=()=>loadVendor('vendor/heic2any/heic2any.min.js',()=>typeof heic2any!=='undefined','HEIC converter unavailable');
+
   /* ---------- HEIC / HEIF ---------- */
   function isHeicFile(f){
     return /\.(heic|heif)$/i.test(f.name) || f.type==='image/heic' || f.type==='image/heif';
-  }
-  let heicLoader=null;
-  function loadHeicLibrary(){
-    if(typeof heic2any!=='undefined') return Promise.resolve();
-    if(heicLoader) return heicLoader;
-    heicLoader=new Promise((resolve,reject)=>{
-      const script=document.createElement('script');
-      script.src='vendor/heic2any/heic2any.min.js';
-      script.onload=()=>typeof heic2any!=='undefined'?resolve():reject(new Error('HEIC converter unavailable'));
-      script.onerror=()=>reject(new Error('HEIC converter unavailable'));
-      document.head.appendChild(script);
-    });
-    return heicLoader;
   }
   async function toDisplayable(file,onStatus){
     let display=file;
@@ -804,6 +814,13 @@
         return null;
       }
       cstat('Rendering report image…','loading');
+      try{
+        await loadQrLibrary();
+        if(networkMode==='online') await loadMapCapture();
+      }catch(error){
+        cstat('Could not load the export components — check the connection and try again.','err');
+        throw error;
+      }
 
       const scale=2, gap=18, radius=14, maxW=1180, captureScale=2;
       const ar=(photoImg.naturalHeight/photoImg.naturalWidth)||1;
@@ -1021,8 +1038,15 @@
       setStatus('Some files were skipped: '+reasons.join(', ')+'.','warn');
     }
     else clearStatus();
+    // On the first clean batch, hand focus of the page over to the new cards;
+    // skip when files were rejected so the warning above stays readable.
+    const followToWorkspace=!photos.length && good.length===files.length;
     workspace.classList.add('show');
     good.forEach(createPhoto);
+    if(followToWorkspace) requestAnimationFrame(()=>workspace.scrollIntoView({
+      behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',
+      block:'start'
+    }));
   }
 
   /* ---------- events ---------- */
@@ -1097,9 +1121,17 @@
      shared #exportCanvas; all build buttons are disabled meanwhile so a user
      can't race the canvas or mutate the photo list mid-batch. */
   const exportDocxBtn=$('exportDocxBtn'), exportDocxPlainBtn=$('exportDocxPlainBtn');
+  const exportMenu=document.querySelector('.export-menu'),
+        exportMenuSummary=exportMenu.querySelector('summary'),
+        exportMenuLabel=exportMenuSummary.textContent;
+  // Menu items keep reporting progress after the menu closes by mirroring
+  // their label onto the always-visible summary button.
+  function mirrorMenuProgress(triggerBtn,text){
+    if(!exportMenu.contains(triggerBtn)) return;
+    exportMenuSummary.textContent=text==null?exportMenuLabel:text;
+  }
   async function exportAllDocx(triggerBtn,withCaption){
     if(!photos.length) return;
-    if(typeof docx==='undefined'){ ping('Word export unavailable — library not loaded'); return; }
     if(exportBusy){ ping('Another export is still running'); return; }
     exportBusy=true;
 
@@ -1113,8 +1145,18 @@
     const children=[]; let skipped=0, failed=0;
 
     try{
+      try{
+        triggerBtn.textContent='Preparing Word export…';
+        mirrorMenuProgress(triggerBtn,'Preparing Word export…');
+        await loadDocxLibrary();
+      }catch(error){
+        console.error('word export',error);
+        ping('Word export unavailable — the library failed to load');
+        return;
+      }
       for(let i=0;i<batch.length;i++){
-        triggerBtn.innerHTML='Rendering '+(i+1)+'/'+batch.length+'…';
+        triggerBtn.textContent='Rendering '+(i+1)+'/'+batch.length+'…';
+        mirrorMenuProgress(triggerBtn,'Rendering '+(i+1)+'/'+batch.length+'…');
         let blob=null;
         try{ blob=await batch[i].buildExport(withCaption); }
         catch(e){ console.error('word export: photo '+(i+1),e); failed++; continue; }
@@ -1141,7 +1183,8 @@
         return;
       }
 
-      triggerBtn.innerHTML='Building document…';
+      triggerBtn.textContent='Building document…';
+      mirrorMenuProgress(triggerBtn,'Building document…');
       const doc=new docx.Document({sections:[{children}]});
       const out=await docx.Packer.toBlob(doc);
 
@@ -1161,6 +1204,7 @@
       exportBusy=false;
       exportDocxBtn.disabled=false; exportDocxPlainBtn.disabled=false;
       triggerBtn.innerHTML=label;
+      mirrorMenuProgress(triggerBtn,null);
       $('clearAllBtn').disabled=false;
       // recompute from current state — a photo may have finished loading (or
       // been found GPS-less) while the batch ran, so a snapshot would be stale
@@ -1192,6 +1236,7 @@
     try{
       for(let index=0;index<batch.length;index++){
         triggerBtn.textContent='Rendering '+(index+1)+'/'+batch.length+'…';
+        mirrorMenuProgress(triggerBtn,'Rendering '+(index+1)+'/'+batch.length+'…');
         const blob=await batch[index].buildExport(true);if(!blob)continue;
         if(kind==='zip') entries.push({name:'reports/'+batch[index].filename(''),data:blob});
         else{
@@ -1208,7 +1253,7 @@
       }else RT.downloadBlob(await RT.createPdf(pages),'geotag_handoff_'+date+'.pdf');
       ping((kind==='zip'?'ZIP':'PDF')+' downloaded ✓');
     }catch(error){console.error(kind+' export',error);ping((kind==='zip'?'ZIP':'PDF')+' export failed');}
-    finally{exportBusy=false;triggerBtn.disabled=false;triggerBtn.textContent=label;}
+    finally{exportBusy=false;triggerBtn.disabled=false;triggerBtn.textContent=label;mirrorMenuProgress(triggerBtn,null);}
   }
 
   $('exportZipBtn').addEventListener('click',event=>exportReportBundle('zip',event.currentTarget));
@@ -1216,6 +1261,18 @@
   $('exportCsvBtn').addEventListener('click',()=>exportRecords('csv'));
   $('exportJsonBtn').addEventListener('click',()=>exportRecords('json'));
   $('exportGeoJsonBtn').addEventListener('click',()=>exportRecords('geojson'));
+
+  // The export menu behaves like a real menu: choosing an item closes it, and
+  // clicking elsewhere or pressing Escape dismisses it.
+  exportMenu.querySelectorAll('.export-menu-items button').forEach(button=>{
+    button.addEventListener('click',()=>{ exportMenu.open=false; });
+  });
+  document.addEventListener('click',event=>{
+    if(exportMenu.open&&!exportMenu.contains(event.target)) exportMenu.open=false;
+  });
+  exportMenu.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&exportMenu.open){ exportMenu.open=false; exportMenuSummary.focus(); }
+  });
 
   // map style applies to every photo at once
   document.querySelectorAll('input[name="mapType"]').forEach(r=>{
