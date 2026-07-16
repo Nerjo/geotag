@@ -135,7 +135,7 @@
   }
 
   function recordsToCsv(records) {
-    const keys = ["recordId", "sourceFilename", "capturedAt", "timezone", "latitude", "longitude", "originalLatitude", "originalLongitude", "accuracyMeters", "displacementMeters", "adjustmentReason", "caption", "mapProvider", "appVersion", "navigationUrl"];
+    const keys = ["recordId", "sourceFilename", "capturedAt", "timezone", "latitude", "longitude", "originalLatitude", "originalLongitude", "accuracyMeters", "displacementMeters", "caption", "mapProvider", "appVersion", "navigationUrl"];
     return [keys.join(","), ...records.map(record => keys.map(key => csvCell(record[key])).join(","))].join("\r\n") + "\r\n";
   }
 

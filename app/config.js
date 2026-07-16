@@ -7,7 +7,6 @@
   const defaults = {
     appVersion: "0.2.0",
     buildId: root.GEOTAG_BUILD_ID || "development",
-    privacyDefault: "local",
     navigationBaseUrl: "",
     maxFiles: 25,
     maxFileBytes: 30 * 1024 * 1024,
@@ -26,13 +25,13 @@
         reportIssueUrl: "https://www.openstreetmap.org/fixthemap"
       },
       satellite: {
-        enabled: false,
-        label: "Approved satellite service (not configured)",
-        url: "",
+        enabled: true,
+        label: "Esri World Imagery",
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         maxZoom: 19,
-        attributionHtml: "",
-        attributionText: "",
-        disclosure: "Configure an approved internal or commercial satellite provider at deployment time.",
+        attributionHtml: 'Tiles © <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a> — Source: Esri, Maxar, Earthstar Geographics',
+        attributionText: "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics",
+        disclosure: "Visible satellite tiles reveal tile coordinates, your IP address, and this site's browser referrer to server.arcgisonline.com.",
         allowOfflineCache: false,
         reportIssueUrl: ""
       },
@@ -67,8 +66,6 @@
   root.GEOTAG_CONFIG = {
     ...defaults,
     ...supplied,
-    // Local-first is a product invariant, not a deployer preference.
-    privacyDefault: "local",
     providers,
     geocoder: { ...defaults.geocoder, ...(supplied.geocoder || {}) }
   };

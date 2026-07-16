@@ -1,7 +1,7 @@
 {
   "name": "GeoTag · Field Inspection Mapper",
   "short_name": "GeoTag",
-  "description": "Create privacy-controlled field-handoff records from photos. Local coordinates are the default; online maps are an explicit opt-in.",
+  "description": "Create field-handoff records from photos — side-by-side photo and map reports with a scannable navigation QR code.",
   "id": "/",
   "start_url": ".",
   "scope": ".",

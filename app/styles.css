@@ -245,13 +245,6 @@ dialog.overlay::backdrop{background:rgba(20,21,23,.82);backdrop-filter:blur(3px)
 .share-details-label{display:block;margin-top:14px;font-weight:600}
 .share-details{width:100%;margin-top:6px;padding:9px 11px;border:1.5px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);font:500 .78rem/1.45 'IBM Plex Mono',monospace;resize:vertical}
 
-.consent-dialog{max-width:620px;width:calc(100% - 28px);border:1.5px solid var(--ink);border-radius:var(--radius);padding:22px;background:var(--card);color:var(--ink);box-shadow:0 30px 70px -24px rgba(0,0,0,.65)}
-.consent-dialog::backdrop{background:rgba(20,21,23,.72);backdrop-filter:blur(3px)}
-.consent-dialog h2{font-family:'IBM Plex Sans Condensed',sans-serif;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
-.consent-dialog p,.consent-dialog li{line-height:1.5}
-.consent-dialog ul{margin:10px 0 0 20px}
-.retention-note{margin-top:14px;padding:10px 12px;background:var(--good-wash);border-radius:8px;font-size:.86rem}
-
 /* ---------- toast ---------- */
 .toast{
   position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));
@@ -444,13 +437,7 @@ dialog.editor::backdrop{background:#0b0b0d}
 }
 .update-bar button:hover{background:#fff;color:var(--ink)}
 
-/* ---------- trust, location and batch controls ---------- */
-.trust-panel{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;background:var(--card);border:1.5px solid var(--ink);border-radius:var(--radius);padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
-.trust-panel h2{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
-.trust-panel p{font-size:.82rem;line-height:1.45;color:var(--ink-soft)}
-.trust-panel .segmented{margin:0}
-.retention-controls{max-width:340px}
-.retention-controls .retention-note{margin-top:8px;padding:8px 10px}
+/* ---------- location and batch controls ---------- */
 .batch-progress{display:flex;align-items:center;gap:8px;font:500 .68rem 'IBM Plex Mono',monospace;color:var(--ink-soft)}
 .batch-progress progress{accent-color:var(--accent);width:110px}
 .export-menu{position:relative}
@@ -462,10 +449,9 @@ dialog.editor::backdrop{background:#0b0b0d}
 .manual-location{padding:14px;background:#fff8ef;border:1px solid #d7a478;border-radius:10px;margin-top:10px}
 .manual-location h3{font-size:.86rem;margin-bottom:8px}
 .coordinate-edit{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
-.coordinate-edit label,.adjustment-controls label{font:600 .64rem 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}
-.coordinate-edit input,.adjustment-controls input{display:block;width:100%;margin-top:4px;min-height:44px;padding:8px 9px;border:1.5px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);font:.86rem 'IBM Plex Mono',monospace}
+.coordinate-edit label{font:600 .64rem 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}
+.coordinate-edit input{display:block;width:100%;margin-top:4px;min-height:44px;padding:8px 9px;border:1.5px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);font:.86rem 'IBM Plex Mono',monospace}
 .manual-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.adjustment-controls{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-top:10px}
 .local-map-panel{min-height:280px;padding:24px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;background:linear-gradient(135deg,#f6f2e9,#e5ded0);color:var(--ink-soft)}
 .local-map-panel strong{color:var(--ink);font-size:1rem;margin-bottom:8px}
 .provider-note{font:.68rem/1.5 'IBM Plex Mono',monospace;color:var(--ink-soft);margin-top:8px}
@@ -493,7 +479,6 @@ dialog.editor::backdrop{background:#0b0b0d}
   .actions .left{margin-right:0}
   .actions .btn{flex:1 1 auto;justify-content:center}
   .actions .btn.ghost{flex:0 0 auto}
-  .trust-panel{grid-template-columns:1fr}
   .coordinate-edit{grid-template-columns:1fr}
   .ws-bar>.btn,.ws-bar>.export-menu{width:100%}
   .ws-bar>.btn,.export-menu summary{justify-content:center}

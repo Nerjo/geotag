@@ -17,7 +17,6 @@
   }
 
   $('buildTag').textContent='V'+CONFIG.appVersion+' · '+CONFIG.buildId;
-  let networkMode=CONFIG.privacyDefault==='online'?'online':'local';
   let processTotal=0, processDone=0;
   const processingQueue=new RT.TaskQueue({concurrency:CONFIG.processingConcurrency||2});
   const geocodeQueue=new RT.TaskQueue({concurrency:1,minIntervalMs:CONFIG.geocoder.minIntervalMs||1100});
@@ -212,28 +211,30 @@
     return provider&&provider.attributionText?provider.attributionText:'Provider attribution unavailable';
   }
 
+  // Left-aligned so the navigation QR can occupy the map's bottom-right corner.
   function drawProviderAttribution(ctx,type,x,y,width){
     const attr=attributionFor(type);
     ctx.save();
     ctx.textAlign='left';ctx.font='9px "IBM Plex Mono", monospace';
     const tw=Math.min(ctx.measureText(attr).width,width-12);
-    ctx.fillStyle='rgba(255,255,255,.9)';ctx.fillRect(x+width-tw-12,y-18,tw+12,18);
-    ctx.fillStyle='#292c30';ctx.fillText(attr,x+width-tw-6,y-6,tw);
+    ctx.fillStyle='rgba(255,255,255,.9)';ctx.fillRect(x,y-18,tw+12,18);
+    ctx.fillStyle='#292c30';ctx.fillText(attr,x+6,y-6,tw);
     ctx.restore();
   }
 
-  function drawNavigationQr(ctx,text,right,bottom,targetSize=128){
+  // QR on a white plate with its label inside, anchored to (right,bottom).
+  function drawNavigationQr(ctx,text,right,bottom,targetSize=110){
     const code=qrcode(0,'M');
     code.addData(text,'Byte');code.make();
-    const count=code.getModuleCount(),quiet=4;
+    const count=code.getModuleCount(),quiet=3;
     const cell=Math.max(2,Math.floor(targetSize/(count+quiet*2)));
-    const size=(count+quiet*2)*cell,x=right-size,y=bottom-size;
-    ctx.save();ctx.fillStyle='#fff';ctx.fillRect(x,y,size,size);ctx.fillStyle='#111';
+    const size=(count+quiet*2)*cell,labelH=13,x=right-size,y=bottom-size-labelH;
+    ctx.save();ctx.fillStyle='#fff';ctx.fillRect(x,y,size,size+labelH);ctx.fillStyle='#111';
     for(let row=0;row<count;row++)for(let col=0;col<count;col++){
       if(code.isDark(row,col))ctx.fillRect(x+(col+quiet)*cell,y+(row+quiet)*cell,cell,cell);
     }
-    ctx.fillStyle='#1a1c1e';ctx.font='600 9px "IBM Plex Mono", monospace';ctx.textAlign='center';
-    ctx.fillText('SCAN TO NAVIGATE',x+size/2,bottom+14);
+    ctx.fillStyle='#1a1c1e';ctx.font='600 8px "IBM Plex Mono", monospace';ctx.textAlign='center';
+    ctx.fillText('SCAN TO NAVIGATE',x+size/2,y+size+7);
     ctx.restore();
   }
 
@@ -284,7 +285,7 @@
 
   /* ---------- centrally configurable reverse-geocode queue ---------- */
   function queueGeocode(fn,signal){
-    if(networkMode!=='online' || !CONFIG.geocoder.enabled || !CONFIG.geocoder.url) return Promise.resolve();
+    if(!CONFIG.geocoder.enabled || !CONFIG.geocoder.url) return Promise.resolve();
     return geocodeQueue.enqueue(fn,{signal}).catch(error=>{
       if(error&&error.name!=='AbortError') console.warn('geocode',error);
     });
@@ -351,40 +352,6 @@
     return Object.entries(CONFIG.providers).filter(([,provider])=>provider.enabled&&provider.url);
   }
 
-  function updatePrivacyControls(){
-    document.querySelectorAll('input[name="privacyMode"]').forEach(input=>{
-      input.checked=input.value===networkMode;
-      input.closest('label').classList.toggle('active',input.checked);
-    });
-    $('mapTypes').hidden=networkMode!=='online';
-    const provider=CONFIG.providers[currentMapType()];
-    $('privacySummary').textContent=networkMode==='local'
-      ?'GeoTag makes no automatic map or address request. Reports contain a local coordinate panel.'
-      :'Online for this session: '+(provider?provider.label:'configured provider')+'. '+
-       (CONFIG.geocoder.enabled?CONFIG.geocoder.label+' may receive exact coordinates.':'Address lookup remains disabled.');
-  }
-
-  function setPrivacyMode(mode){
-    networkMode=mode==='online'?'online':'local';
-    if(networkMode==='local') geocodeQueue.cancelPending('Privacy mode changed');
-    updatePrivacyControls();
-    photos.forEach(photo=>{
-      if(networkMode==='local') photo.cancelNetwork();
-      photo.setNetworkMode();
-    });
-  }
-
-  function providerDisclosure(){
-    const providers=configuredProviders();
-    const items=providers.map(([,provider])=>'<li><strong>'+esc(provider.label)+'</strong>: '+esc(provider.disclosure)+'</li>');
-    items.push('<li><strong>'+esc(CONFIG.geocoder.label)+'</strong>: '+esc(CONFIG.geocoder.disclosure)+'</li>');
-    return '<p>Online mode is session-only. It sends location-derived requests only after you confirm.</p><ul>'+items.join('')+'</ul>';
-  }
-
-  configuredProviders().forEach(([key,provider])=>{
-    const label=document.querySelector('#mapTypes label[data-type="'+key+'"]');
-    if(label) label.querySelector('span').textContent=provider.label.replace(/ Standard$/,'');
-  });
   document.querySelectorAll('#mapTypes label').forEach(label=>{
     const provider=CONFIG.providers[label.dataset.type];
     if(!provider||!provider.enabled||!provider.url) label.hidden=true;
@@ -394,8 +361,6 @@
     const input=document.querySelector('input[name="mapType"][value="'+firstProvider[0]+'"]');
     if(input){input.checked=true;input.closest('label').classList.add('active');}
   }
-  $('privacyDisclosure').innerHTML=providerDisclosure();
-  updatePrivacyControls();
 
   function createPhoto(file){
     const id=++nextId;
@@ -452,7 +417,7 @@
     let networkController=new AbortController(), geocodeController=new AbortController(), mapVisible=!('IntersectionObserver' in window), mapPending=false;
     const state={lat:null,lon:null,heading:null,caption:'',captionEdited:false,
                  address:null,pinMoved:false,sourceLat:null,sourceLon:null,
-                 adjustmentReason:'',locationSource:'none',recordId,sourceFilename:file.name,
+                 locationSource:'none',recordId,sourceFilename:file.name,
                  accuracy:null,gpsStaleMin:null,capturedAt:'',timezone:'',mapComplete:null};
 
     function cstat(msg,type){
@@ -589,11 +554,10 @@
           '<label for="edit-lat-'+id+'">Latitude<input id="edit-lat-'+id+'" class="editLat" inputmode="decimal" value="'+state.lat+'"></label>'+
           '<label for="edit-lon-'+id+'">Longitude<input id="edit-lon-'+id+'" class="editLon" inputmode="decimal" value="'+state.lon+'"></label>'+
           '<button class="btn ghost sm applyCoords" type="button">Apply</button></div>'+
-          '<div class="adjustment-controls"><label for="adjust-reason-'+id+'">Adjustment reason<input id="adjust-reason-'+id+'" class="adjustmentReason" maxlength="180" value="'+esc(state.adjustmentReason)+'" placeholder="Required when coordinates are changed"></label>'+
-          '<button class="btn ghost sm resetLocation" type="button"'+(state.pinMoved?'':' hidden')+'>Reset original</button></div></div>');
+          '<div class="manual-actions"><button class="btn ghost sm resetLocation" type="button"'+(state.pinMoved?'':' hidden')+'>Reset original</button></div></div>');
         rows.push('<div class="field wide"><div class="k"><label for="caption-'+id+'">Caption</label></div>'+
           '<textarea id="caption-'+id+'" class="cap-input captionField" rows="3" maxlength="1200" aria-describedby="caption-help-'+id+'" placeholder="'+
-          (networkMode==='online'&&CONFIG.geocoder.enabled?'Looking up address… (or type your own caption)':'Type a complete caption')+'">'+esc(state.caption||'')+'</textarea>'+
+          (CONFIG.geocoder.enabled?'Looking up address… (or type your own caption)':'Type a complete caption')+'">'+esc(state.caption||'')+'</textarea>'+
           '<span class="provider-note" id="caption-help-'+id+'">Up to 1,200 characters; every line is included in the report.</span></div>');
         rows.push('<div class="field wide"><div class="k">Open in</div><div class="v"><div class="maplinks">'+
           '<a class="maplink geoLink" href="#">▷ Device maps</a>'+
@@ -627,7 +591,6 @@
         applyAdjustedLocation(lat,lon);
       });
       const reset=q('.resetLocation'); if(reset) reset.addEventListener('click',resetLocation);
-      const reason=q('.adjustmentReason'); if(reason) reason.addEventListener('input',()=>{ state.adjustmentReason=reason.value; });
       const cap=q('.captionField'); if(cap) cap.addEventListener('input',()=>{ state.caption=cap.value; state.captionEdited=true; });
       const hf=q('.headingField'); if(hf) hf.addEventListener('input',()=>{
         let v=parseInt(hf.value,10);
@@ -643,7 +606,7 @@
       if(!validCoordinates(lat,lon)){ cstat('Enter valid decimal latitude and longitude.','err'); return; }
       state.lat=lat; state.lon=lon; state.sourceLat=lat; state.sourceLon=lon;
       state.locationSource=source; state.accuracy=Number.isFinite(accuracy)?accuracy:null;
-      state.pinMoved=false; state.adjustmentReason='';
+      state.pinMoved=false;
       renderReadout(metadata); updateMapMode(); scheduleGeocode();
       buildBtn.disabled=false; buildPlainBtn.disabled=false;
       cstat('Location added from '+source+'.','ok');
@@ -654,11 +617,11 @@
       state.lat=lat; state.lon=lon;
       state.pinMoved=RT.haversineMeters(state.sourceLat,state.sourceLon,lat,lon)>.25;
       renderReadout(metadata); updateMapMode(); scheduleGeocode();
-      cstat(state.pinMoved?'Coordinates adjusted. Add a reason before handoff.':'Coordinates match the original location.',state.pinMoved?'warn':'ok');
+      cstat(state.pinMoved?'Coordinates adjusted.':'Coordinates match the original location.','ok');
     }
     function resetLocation(){
       if(state.sourceLat==null) return;
-      state.lat=state.sourceLat; state.lon=state.sourceLon; state.pinMoved=false; state.adjustmentReason='';
+      state.lat=state.sourceLat; state.lon=state.sourceLon; state.pinMoved=false;
       renderReadout(metadata); updateMapMode(); scheduleGeocode(); gpsStatus();
     }
     function updateCoordReadout(){ renderReadout(metadata); }
@@ -674,7 +637,7 @@
     /* ----- reverse geocoding (prefills caption unless user typed) ----- */
     async function reverseGeocode(lat,lon,signal){
       const cap=q('.captionField');
-      if(!CONFIG.geocoder.enabled||!CONFIG.geocoder.url||networkMode!=='online') return;
+      if(!CONFIG.geocoder.enabled||!CONFIG.geocoder.url) return;
       const ctrl=new AbortController();
       const abort=()=>ctrl.abort();
       if(signal) signal.addEventListener('abort',abort,{once:true});
@@ -704,7 +667,7 @@
     function scheduleGeocode(){
       if(geocodeController) geocodeController.abort();
       geocodeController=new AbortController();
-      if(state.lat==null||networkMode!=='online'||!CONFIG.geocoder.enabled||!CONFIG.geocoder.url) return;
+      if(state.lat==null||!CONFIG.geocoder.enabled||!CONFIG.geocoder.url) return;
       const signal=geocodeController.signal, lat=state.lat, lon=state.lon;
       queueGeocode(()=>reverseGeocode(lat,lon,signal),signal);
     }
@@ -751,16 +714,18 @@
     function renderLocalPanel(){
       destroyMap();
       const pair=state.lat==null?'Add coordinates to continue':RT.formatCoordinate(state.lat,state.accuracy)+', '+RT.formatCoordinate(state.lon,state.accuracy);
-      mapEl.innerHTML='<div class="local-map-panel"><strong>Local coordinates mode</strong><span>'+esc(pair)+'</span><span class="provider-note">No automatic map or address request has been sent.</span></div>';
+      mapEl.innerHTML='<div class="local-map-panel"><strong>'+(state.lat==null?'No location yet':'Map unavailable')+'</strong><span>'+esc(pair)+'</span></div>';
     }
 
     function renderMap(){
-      if(mapPending||map||!mapVisible||networkMode!=='online'||state.lat==null) return Promise.resolve();
+      if(mapPending||map||!mapVisible||state.lat==null) return Promise.resolve();
       mapPending=true;
       return new Promise(resolve=>{
         mapEl.innerHTML='';
         requestAnimationFrame(()=>{
-          if(networkMode!=='online'||!card.isConnected){ mapPending=false; resolve(); return; }
+          // `map` may exist if another render won the frame race; never
+          // initialise Leaflet twice on the same container.
+          if(map||!card.isConnected){ mapPending=false; resolve(); return; }
           map=L.map(mapEl,{preferCanvas:false,zoomControl:true}).setView([state.lat,state.lon],16);
           syncMapHeight();
           tileLayerFor(currentMapType()).addTo(map);
@@ -785,24 +750,20 @@
     }
 
     function updateMapMode(){
-      if(state.lat==null||networkMode!=='online'){ renderLocalPanel(); return; }
+      if(state.lat==null){ renderLocalPanel(); return; }
       destroyMap();
       mapEl.innerHTML='<div class="local-map-panel"><strong>Online map enabled</strong><span>Map loads when this card is visible.</span></div>';
       renderMap().catch(error=>{ console.error('map',error); renderLocalPanel(); });
     }
 
     function restyleMap(){
-      if(state.lat==null||networkMode!=='online') return;
+      if(state.lat==null) return;
       destroyMap(); renderMap().catch(error=>console.error('map style',error));
     }
 
     /* ----- export composite (one report per photo) ----- */
     async function buildExport(withCaption=true){
       if(state.lat==null) return null;
-      if(state.pinMoved&&!state.adjustmentReason.trim()){
-        cstat('Add an adjustment reason before exporting this corrected location.','err');
-        return null;
-      }
       cstat('Rendering report image…','loading');
 
       const scale=2, gap=18, radius=14, maxW=1180, captureScale=2;
@@ -811,25 +772,12 @@
       const imgW=panelW, imgH=Math.round(panelW*ar), mapW=panelW, mapH=imgH;
       const W=imgW+mapW+gap, lineH=18;
       const capFont='12px "IBM Plex Mono", monospace';
-      const smallFont='10px "IBM Plex Mono", monospace';
       const capLines=withCaption?wrapLines(state.caption,W,capFont,Infinity):[];
-      const provider=networkMode==='online'?CONFIG.providers[currentMapType()]:null;
-      const sourcePair=state.sourceLat==null?'not recorded':RT.formatCoordinate(state.sourceLat,state.accuracy)+', '+RT.formatCoordinate(state.sourceLon,state.accuracy);
-      const currentPair=RT.formatCoordinate(state.lat,state.accuracy)+', '+RT.formatCoordinate(state.lon,state.accuracy);
-      const displacement=state.pinMoved?RT.haversineMeters(state.sourceLat,state.sourceLon,state.lat,state.lon):0;
+      const provider=CONFIG.providers[currentMapType()];
       const navigationUrl=RT.navigationUrl(CONFIG,state);
-      const metaEntries=[
-        'RECORD '+state.recordId+' · SOURCE '+state.sourceFilename,
-        'CAPTURED '+(state.capturedAt||'not recorded')+' · TZ '+(state.timezone||'not recorded'),
-        'ORIGINAL '+sourcePair+(state.pinMoved?' · ADJUSTED '+currentPair+' · '+Math.round(displacement)+' m':''),
-        state.pinMoved?'ADJUSTMENT '+state.adjustmentReason:'LOCATION SOURCE '+state.locationSource,
-        'ACCURACY '+(state.accuracy!=null?'±'+fmtAcc(state.accuracy)+' m':'not recorded; displayed precision limited'),
-        'MAP '+(provider?provider.label:'none · local coordinates mode')+' · APP '+CONFIG.appVersion+' · BUILD '+CONFIG.buildId,
-        'NAV '+navigationUrl
-      ];
-      const metaLines=metaEntries.flatMap(line=>wrapLines(line,W,smallFont,Infinity));
-      const warnLines=(state.accuracy!=null&&state.accuracy>ACC_WARN_M?1:0)+(state.gpsStaleMin!=null&&state.gpsStaleMin>STALE_FIX_MIN?1:0);
-      const footerH=18+24+capLines.length*lineH+warnLines*lineH+metaLines.length*15+178;
+      // Footer is a single coordinate line plus the caption; the "no caption"
+      // build is exactly the side-by-side photo & map.
+      const footerH=withCaption?16+22+capLines.length*lineH+14:0;
       const H=imgH+footerH;
 
       const canvas=exportCanvas, ctx=canvas.getContext('2d');
@@ -847,7 +795,7 @@
 
       const mx=imgW+gap;
       let mapComplete=true;
-      if(networkMode==='online'&&provider&&provider.enabled&&provider.url){
+      if(provider&&provider.enabled&&provider.url){
         const off=document.createElement('div');
         Object.assign(off.style,{width:mapW+'px',height:mapH+'px',position:'absolute',left:'-10000px',top:'0',overflow:'hidden'});
         document.body.appendChild(off);
@@ -877,7 +825,7 @@
           }
           const pin=new Image(); await new Promise(resolve=>{pin.onload=resolve;pin.onerror=resolve;pin.src='data:image/svg+xml,'+PIN_SVG;});
           ctx.drawImage(pin,tipX-17,tipY-44,34,44);
-          drawProviderAttribution(ctx,currentMapType(),mx,mapH,mapW);
+          drawProviderAttribution(ctx,currentMapType(),mx,mapH,mapW-134);
           if(!mapComplete){
             const warning='⚠ MAP TILES INCOMPLETE';ctx.font='600 10px "IBM Plex Mono", monospace';const ww=ctx.measureText(warning).width;
             ctx.fillStyle='rgba(255,255,255,.9)';ctx.fillRect(mx+8,8,ww+12,20);ctx.fillStyle='#7a2d00';ctx.fillText(warning,mx+14,22);
@@ -887,26 +835,27 @@
           console.error('map capture',error);mapComplete=false;ctx.save();round(mx,0,mapW,mapH,radius);ctx.clip();
           ctx.fillStyle='#e7e2d6';ctx.fillRect(mx,0,mapW,mapH);ctx.fillStyle='#45484d';ctx.font='13px monospace';ctx.textAlign='center';
           ctx.fillText('map unavailable',mx+mapW/2,mapH/2);ctx.restore();
-          drawProviderAttribution(ctx,currentMapType(),mx,mapH,mapW);
+          drawProviderAttribution(ctx,currentMapType(),mx,mapH,mapW-134);
         }finally{ cleanMap.remove();off.remove(); }
       }else{
         ctx.save();round(mx,0,mapW,mapH,radius);ctx.clip();ctx.fillStyle='#e7e2d6';ctx.fillRect(mx,0,mapW,mapH);
-        ctx.textAlign='center';ctx.fillStyle='#1a1c1e';ctx.font='600 15px "IBM Plex Mono", monospace';ctx.fillText('LOCAL COORDINATES',mx+mapW/2,mapH*.34);
+        ctx.textAlign='center';ctx.fillStyle='#1a1c1e';ctx.font='600 15px "IBM Plex Mono", monospace';ctx.fillText('COORDINATES',mx+mapW/2,mapH*.34);
         ctx.font='600 20px "IBM Plex Mono", monospace';ctx.fillText(RT.formatCoordinate(state.lat,state.accuracy)+'°',mx+mapW/2,mapH*.48);
         ctx.fillText(RT.formatCoordinate(state.lon,state.accuracy)+'°',mx+mapW/2,mapH*.58);
-        ctx.font='11px "IBM Plex Mono", monospace';ctx.fillStyle='#45484d';ctx.fillText('No automatic map/address request sent',mx+mapW/2,mapH*.72);ctx.restore();
+        ctx.font='11px "IBM Plex Mono", monospace';ctx.fillStyle='#45484d';ctx.fillText('Map unavailable',mx+mapW/2,mapH*.72);ctx.restore();
       }
 
-      let y=imgH+16;ctx.textAlign='left';ctx.fillStyle='#b94700';ctx.fillRect(0,y,52,3);y+=22;
-      ctx.fillStyle='#1a1c1e';ctx.font='600 13px "IBM Plex Mono", monospace';
-      const coord='LAT '+RT.formatCoordinate(state.lat,state.accuracy)+'°   LON '+RT.formatCoordinate(state.lon,state.accuracy)+'°'+
-        (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'');
-      ctx.fillText(coord,0,y);
-      if(withCaption&&capLines.length){ctx.fillStyle='#45484d';ctx.font=capFont;for(const line of capLines){y+=lineH;ctx.fillText(line,0,y);}}
-      if(state.accuracy!=null&&state.accuracy>ACC_WARN_M){y+=lineH;ctx.fillStyle='#7a2d00';ctx.font='600 11px "IBM Plex Mono", monospace';ctx.fillText('⚠ LOW GPS ACCURACY (±'+fmtAcc(state.accuracy)+' M) — VERIFY LOCATION',0,y);}
-      if(state.gpsStaleMin!=null&&state.gpsStaleMin>STALE_FIX_MIN){y+=lineH;ctx.fillStyle='#7a2d00';ctx.font='600 11px "IBM Plex Mono", monospace';ctx.fillText('⚠ GPS FIX ~'+Math.round(state.gpsStaleMin)+' MIN OLDER THAN PHOTO',0,y);}
-      y+=17;ctx.fillStyle='#45484d';ctx.font=smallFont;for(const line of metaLines){ctx.fillText(line,0,y);y+=15;}
-      drawNavigationQr(ctx,navigationUrl,W-8,H-28,128);
+      // Navigation QR sits in the very bottom-right corner of the map panel.
+      drawNavigationQr(ctx,navigationUrl,mx+mapW-12,mapH-12,110);
+
+      if(withCaption){
+        let y=imgH+16;ctx.textAlign='left';ctx.fillStyle='#b94700';ctx.fillRect(0,y,52,3);y+=22;
+        ctx.fillStyle='#1a1c1e';ctx.font='600 13px "IBM Plex Mono", monospace';
+        const coord='LAT '+RT.formatCoordinate(state.lat,state.accuracy)+'°   LON '+RT.formatCoordinate(state.lon,state.accuracy)+'°'+
+          (state.heading!=null?'   HDG '+Math.round(state.heading)+'° '+compass(state.heading):'');
+        ctx.fillText(coord,0,y);
+        if(capLines.length){ctx.fillStyle='#45484d';ctx.font=capFont;for(const line of capLines){y+=lineH;ctx.fillText(line,0,y);}}
+      }
 
       const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
       state.mapComplete=mapComplete;
@@ -918,14 +867,14 @@
       return 'geotag_'+state.recordId+(suffix||'')+'.png';
     }
     function getRecord(){
-      const provider=networkMode==='online'?CONFIG.providers[currentMapType()]:null;
+      const provider=CONFIG.providers[currentMapType()];
       const displacement=state.pinMoved&&state.sourceLat!=null
         ?RT.haversineMeters(state.sourceLat,state.sourceLon,state.lat,state.lon):0;
       const record={
         recordId:state.recordId,sourceFilename:state.sourceFilename,capturedAt:state.capturedAt,timezone:state.timezone,
         latitude:state.lat,longitude:state.lon,originalLatitude:state.sourceLat,originalLongitude:state.sourceLon,
         accuracyMeters:state.accuracy,displacementMeters:Math.round(displacement*10)/10,
-        adjustmentReason:state.adjustmentReason,caption:state.caption,mapProvider:provider?provider.label:'Local coordinates',
+        caption:state.caption,mapProvider:provider?provider.label:'None',
         appVersion:CONFIG.appVersion
       };
       record.navigationUrl=RT.navigationUrl(CONFIG,{recordId:record.recordId,lat:record.latitude,lon:record.longitude});
@@ -985,15 +934,14 @@
     if('IntersectionObserver' in window){
       mapObserver=new IntersectionObserver(entries=>{
         mapVisible=entries.some(entry=>entry.isIntersecting);
-        if(mapVisible&&networkMode==='online') renderMap().catch(error=>console.error('lazy map',error));
+        if(mapVisible) renderMap().catch(error=>console.error('lazy map',error));
       },{rootMargin:'240px'});
       mapObserver.observe(mapPane);
     }
 
     const inst={ buildBtn, buildPlainBtn, buildExport, filename, restyleMap, syncMapHeight, remove,
                  applyEdit, revertOriginal, hasGps:()=>state.lat!=null,hasLocation:()=>state.lat!=null,
-                 getRecord,shareText,setNetworkMode:()=>{updateMapMode();scheduleGeocode();renderReadout(metadata);},
-                 cancelNetwork:()=>{networkController.abort();geocodeController.abort();destroyMap();},
+                 getRecord,shareText,
                  getDisplaySrc:()=>displaySrc, getOriginalSrc:()=>originalSrc };
     buildBtn.addEventListener('click',()=>openExport(inst,buildBtn,true));
     buildPlainBtn.addEventListener('click',()=>openExport(inst,buildPlainBtn,false));
@@ -1055,15 +1003,6 @@
     }catch(error){ setStatus('Could not import the shared photo: '+error.message,'err'); }
   })();
 
-  document.querySelectorAll('input[name="privacyMode"]').forEach(input=>input.addEventListener('change',()=>{
-    if(input.value==='local'){ setPrivacyMode('local'); return; }
-    input.checked=false;
-    if(!$('privacyDialog').open) $('privacyDialog').showModal();
-  }));
-  $('privacyDialog').addEventListener('close',()=>{
-    setPrivacyMode($('privacyDialog').returnValue==='confirm'?'online':'local');
-  });
-
   async function clearOwnedPrivateCaches(includeSharedPhotos=false){
     let removed=0;
     if('caches' in window){
@@ -1076,11 +1015,6 @@
       navigator.serviceWorker.controller.postMessage({type:includeSharedPhotos?'CLEAR_PRIVATE_DATA':'CLEAR_MAP_DATA'});
     return removed;
   }
-
-  $('clearMapDataBtn').addEventListener('click',async()=>{
-    const removed=await clearOwnedPrivateCaches(false);
-    ping(removed?'Offline map data cleared':'No GeoTag offline map data stored');
-  });
 
   $('clearAllBtn').addEventListener('click',async()=>{
     photos.slice().forEach(p=>p.remove());
@@ -1222,7 +1156,6 @@
     r.addEventListener('change',()=>{
       document.querySelectorAll('#mapTypes label').forEach(l=>l.classList.remove('active'));
       r.closest('label').classList.add('active');
-      updatePrivacyControls();
       photos.forEach(p=>p.restyleMap());
     });
   });
