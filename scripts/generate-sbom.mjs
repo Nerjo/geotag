@@ -7,7 +7,7 @@ const components = [
   { id: "Leaflet", name: "Leaflet", version: "1.9.4", license: "BSD-2-Clause", source: "https://github.com/Leaflet/Leaflet", paths: ["vendor/leaflet"] },
   { id: "exifr", name: "exifr", version: "NOASSERTION", license: "MIT", source: "https://github.com/MikeKovarik/exifr", paths: ["vendor/exifr"] },
   { id: "html2canvas", name: "html2canvas", version: "1.4.1", license: "MIT", source: "https://github.com/niklasvh/html2canvas", paths: ["vendor/html2canvas"] },
-  { id: "heic2any", name: "heic2any", version: "NOASSERTION", license: "MIT", source: "https://github.com/alexcorvi/heic2any", paths: ["vendor/heic2any"] },
+  { id: "heic-to", name: "heic-to", version: "1.5.2", license: "LGPL-3.0-only", source: "https://github.com/hoppergee/heic-to", paths: ["vendor/heic-to"] },
   { id: "docx", name: "docx", version: "NOASSERTION", license: "MIT", source: "https://github.com/dolanmiu/docx", paths: ["vendor/docx"] },
   { id: "QRCodeGenerator", name: "qrcode-generator", version: "2.0.4", license: "MIT", source: "https://github.com/kazuhikoarase/qrcode-generator", paths: ["vendor/qrcode"] },
   { id: "IBMPlex", name: "IBM Plex fonts", version: "NOASSERTION", license: "OFL-1.1", source: "https://github.com/IBM/plex", paths: ["vendor/fonts"] }

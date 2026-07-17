@@ -33,6 +33,19 @@ test("completes a manual field handoff", async ({ page }) => {
   expect(await page.pageErrors()).toEqual([]);
 });
 
+test("converts HEIC uploads under the production CSP", async ({ page }) => {
+  const heic = fileURLToPath(new URL("../fixtures/no-gps.heic", import.meta.url));
+  await routeTiles(page);
+  await page.goto("/");
+  await page.locator("#fileInput").setInputFiles(heic);
+  // Conversion succeeded when the preview renders and the card moves on to
+  // asking for a location (the fixture has no EXIF GPS).
+  await expect(page.getByRole("heading", { name: "Add a location" })).toBeVisible({ timeout: 20000 });
+  await expect(page.locator(".cphoto")).toHaveJSProperty("complete", true);
+  await expect(page.locator("#batchProgressWrap")).toBeHidden();
+  expect(await page.pageErrors()).toEqual([]);
+});
+
 test("offers street and satellite map styles", async ({ page }) => {
   await routeTiles(page);
   await page.goto("/");

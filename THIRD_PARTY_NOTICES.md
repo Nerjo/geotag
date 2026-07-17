@@ -10,7 +10,7 @@ SHA-512 integrity values are also included from `package-lock.json`.
 | Leaflet | 1.9.4 | https://github.com/Leaflet/Leaflet | BSD-2-Clause |
 | exifr | vendored UMD build | https://github.com/MikeKovarik/exifr | MIT |
 | html2canvas | 1.4.1 | https://github.com/niklasvh/html2canvas | MIT |
-| heic2any | vendored browser build | https://github.com/alexcorvi/heic2any | MIT |
+| heic-to (libheif) | 1.5.2 (CSP build) | https://github.com/hoppergee/heic-to | LGPL-3.0 |
 | docx | vendored IIFE build | https://github.com/dolanmiu/docx | MIT |
 | qrcode-generator | 2.0.4 | https://github.com/kazuhikoarase/qrcode-generator | MIT |
 | IBM Plex fonts | vendored WOFF2 files | https://github.com/IBM/plex | OFL-1.1 |

@@ -244,27 +244,32 @@
   }
   let heicLoader=null;
   function loadHeicLibrary(){
-    if(typeof heic2any!=='undefined') return Promise.resolve();
-    if(heicLoader) return heicLoader;
-    heicLoader=new Promise((resolve,reject)=>{
-      const script=document.createElement('script');
-      script.src='vendor/heic2any/heic2any.min.js';
-      script.onload=()=>typeof heic2any!=='undefined'?resolve():reject(new Error('HEIC converter unavailable'));
-      script.onerror=()=>reject(new Error('HEIC converter unavailable'));
-      document.head.appendChild(script);
-    });
+    // libheif via heic-to's CSP build: an ES module with no eval/new Function,
+    // so it runs under the strict production Content-Security-Policy.
+    if(!heicLoader){
+      heicLoader=import('../vendor/heic-to/heic-to.min.js').catch(error=>{
+        heicLoader=null;
+        console.error('heic-to load',error);
+        throw new Error('HEIC converter unavailable');
+      });
+    }
     return heicLoader;
   }
   async function toDisplayable(file,onStatus){
     let display=file;
     if(isHeicFile(file)){
-      await loadHeicLibrary();
+      const heic=await loadHeicLibrary();
       if(onStatus) onStatus('Converting HEIC…','loading');
       try{
-        const blob=await heic2any({blob:file,toType:'image/jpeg',quality:0.9});
-        display=new File([Array.isArray(blob)?blob[0]:blob],file.name.replace(/\.(heic|heif)$/i,'.jpg'),{type:'image/jpeg'});
+        // Race the decoder against a timeout so a wedged conversion can never
+        // freeze the processing queue and its progress bar.
+        const blob=await Promise.race([
+          heic.heicTo({blob:file,type:'image/jpeg',quality:0.9}),
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error('HEIC conversion timed out')),45000))
+        ]);
+        display=new File([blob],file.name.replace(/\.(heic|heif)$/i,'.jpg'),{type:'image/jpeg'});
       }catch(e){
-        console.error('heic2any conversion failed',e);
+        console.error('HEIC conversion failed',e);
         throw new Error('Could not convert this HEIC photo — export it as JPEG and upload that instead.');
       }
     }

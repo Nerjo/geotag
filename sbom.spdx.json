@@ -42,13 +42,13 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "name": "heic2any",
-      "SPDXID": "SPDXRef-Package-heic2any",
-      "versionInfo": "NOASSERTION",
-      "downloadLocation": "https://github.com/alexcorvi/heic2any",
+      "name": "heic-to",
+      "SPDXID": "SPDXRef-Package-heic-to",
+      "versionInfo": "1.5.2",
+      "downloadLocation": "https://github.com/hoppergee/heic-to",
       "filesAnalyzed": true,
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
+      "licenseConcluded": "LGPL-3.0-only",
+      "licenseDeclared": "LGPL-3.0-only",
       "copyrightText": "NOASSERTION"
     },
     {
@@ -2354,15 +2354,27 @@
       "copyrightText": "NOASSERTION"
     },
     {
-      "fileName": "./vendor/heic2any/heic2any.min.js",
-      "SPDXID": "SPDXRef-File-dbce31fb5508189b",
+      "fileName": "./vendor/heic-to/LICENSE",
+      "SPDXID": "SPDXRef-File-b9f2df8afdc61424",
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "0963cfa50e9e1e7e6af929a40a81e3e898a673f1270eafa6917dd137e4968164"
+          "checksumValue": "dbd7222d8026e5d6ca6991d1e6a205de927f300840433c2e90a60644a9980c75"
         }
       ],
-      "licenseConcluded": "MIT",
+      "licenseConcluded": "LGPL-3.0-only",
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./vendor/heic-to/heic-to.min.js",
+      "SPDXID": "SPDXRef-File-788c57eb95f276de",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "c189220a7a1e87559758a48ab4700e55629fb23a4cb57489e1e8970be1b9d018"
+        }
+      ],
+      "licenseConcluded": "LGPL-3.0-only",
       "copyrightText": "NOASSERTION"
     },
     {
@@ -2529,7 +2541,7 @@
     {
       "spdxElementId": "SPDXRef-DOCUMENT",
       "relationshipType": "DESCRIBES",
-      "relatedSpdxElement": "SPDXRef-Package-heic2any"
+      "relatedSpdxElement": "SPDXRef-Package-heic-to"
     },
     {
       "spdxElementId": "SPDXRef-DOCUMENT",
@@ -3062,9 +3074,14 @@
       "relatedSpdxElement": "SPDXRef-File-87ba41d8b7f1e78a"
     },
     {
-      "spdxElementId": "SPDXRef-Package-heic2any",
+      "spdxElementId": "SPDXRef-Package-heic-to",
       "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-File-dbce31fb5508189b"
+      "relatedSpdxElement": "SPDXRef-File-b9f2df8afdc61424"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-heic-to",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-788c57eb95f276de"
     },
     {
       "spdxElementId": "SPDXRef-Package-docx",
